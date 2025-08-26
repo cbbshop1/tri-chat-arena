@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Bot, Users, Forward } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 export type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 export type SpecificAI = Exclude<AIModel, "all">;
@@ -41,9 +43,30 @@ export default function ChatInterface() {
   const [input, setInput] = useState("");
   const [selectedAI, setSelectedAI] = useState<AIModel>("all");
   const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const callAI = async (ai: SpecificAI, message: string): Promise<string> => {
+    const functionName = `chat-${ai === 'chatgpt' ? 'openai' : ai}`;
+    const { data, error } = await supabase.functions.invoke(functionName, {
+      body: { message }
+    });
+
+    if (error) {
+      console.error(`Error calling ${ai}:`, error);
+      toast({
+        title: "Error",
+        description: `Failed to get response from ${AI_CONFIGS[ai].name}`,
+        variant: "destructive",
+      });
+      throw error;
+    }
+
+    return data.reply;
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -53,37 +76,57 @@ export default function ChatInterface() {
     };
 
     setMessages(prev => [...prev, userMessage]);
-
-    // Simulate AI responses
-    if (selectedAI === "all") {
-      setTimeout(() => {
-        const responses = Object.keys(AI_CONFIGS).map((ai, index) => ({
-          id: `${Date.now()}-${ai}`,
-          content: `This is a response from ${AI_CONFIGS[ai as keyof typeof AI_CONFIGS].name} to: "${input}"`,
-          sender: ai as SpecificAI,
-          timestamp: new Date(Date.now() + index * 100)
-        }));
-        setMessages(prev => [...prev, ...responses]);
-      }, 1000);
-    } else {
-      const specificAI = selectedAI as SpecificAI;
-      setTimeout(() => {
-        const response: Message = {
-          id: `${Date.now()}-response`,
-          content: `This is a response from ${AI_CONFIGS[specificAI as keyof typeof AI_CONFIGS].name} to: "${input}"`,
-          sender: specificAI,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, response]);
-      }, 1000);
-    }
-
     setInput("");
+    setIsLoading(true);
+
+    try {
+      if (selectedAI === "all") {
+        // Call all AIs in parallel
+        const aiPromises = Object.keys(AI_CONFIGS).map(async (ai) => {
+          try {
+            const reply = await callAI(ai as SpecificAI, input);
+            return {
+              id: `${Date.now()}-${ai}`,
+              content: reply,
+              sender: ai as SpecificAI,
+              timestamp: new Date()
+            };
+          } catch (error) {
+            return {
+              id: `${Date.now()}-${ai}`,
+              content: `Error: Failed to get response from ${AI_CONFIGS[ai as keyof typeof AI_CONFIGS].name}`,
+              sender: ai as SpecificAI,
+              timestamp: new Date()
+            };
+          }
+        });
+
+        const responses = await Promise.all(aiPromises);
+        setMessages(prev => [...prev, ...responses]);
+      } else {
+        // Call specific AI
+        const specificAI = selectedAI as SpecificAI;
+        try {
+          const reply = await callAI(specificAI, input);
+          const response: Message = {
+            id: `${Date.now()}-response`,
+            content: reply,
+            sender: specificAI,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, response]);
+        } catch (error) {
+          // Error already handled in callAI function
+        }
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleForward = (messageId: string, targetAI: Exclude<AIModel, "all">) => {
+  const handleForward = async (messageId: string, targetAI: Exclude<AIModel, "all">) => {
     const message = messages.find(m => m.id === messageId);
-    if (!message) return;
+    if (!message || isLoading) return;
 
     const forwardedMessage: Message = {
       id: `${Date.now()}-forwarded`,
@@ -94,16 +137,22 @@ export default function ChatInterface() {
     };
 
     setMessages(prev => [...prev, forwardedMessage]);
+    setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      const reply = await callAI(targetAI, `Please respond to this forwarded message: "${message.content}"`);
       const response: Message = {
         id: `${Date.now()}-forward-response`,
-        content: `This is ${AI_CONFIGS[targetAI as keyof typeof AI_CONFIGS].name}'s response to the forwarded message.`,
+        content: reply,
         sender: targetAI,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, response]);
-    }, 1000);
+    } catch (error) {
+      // Error already handled in callAI function
+    } finally {
+      setIsLoading(false);
+    }
 
     setSelectedMessage(null);
   };
@@ -253,10 +302,14 @@ export default function ChatInterface() {
             />
             <Button 
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={!input.trim() || isLoading}
               className="bg-primary hover:bg-primary/90"
             >
-              <Send className="w-4 h-4" />
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </Button>
           </div>
           <div className="flex items-center justify-center mt-2">
