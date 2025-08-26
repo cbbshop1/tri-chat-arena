@@ -116,19 +116,10 @@ export default function ChatInterface() {
 
   const createNewSession = async () => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        toast({
-          title: "Error", 
-          description: "Please sign in to create a chat session",
-          variant: "destructive",
-        });
-        return;
-      }
-
+      // For development - create session without auth check
       const { data, error } = await supabase
         .from('chat_sessions')
-        .insert([{ title: 'New Chat', user_id: userData.user.id }])
+        .insert([{ title: 'New Chat', user_id: null }])
         .select()
         .single();
 
