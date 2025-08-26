@@ -50,8 +50,8 @@ interface KnowledgeItem {
 
 const AI_CONFIGS = {
   chatgpt: { name: "ChatGPT", color: "chatgpt", icon: "🤖" },
-  claude: { name: "Claude", color: "claude", icon: "🧠" },
-  deepseek: { name: "DeepSeek", color: "deepseek", icon: "🔍" },
+  claude: { name: "DeepSeek", color: "claude", icon: "🧠" },
+  deepseek: { name: "Claude", color: "deepseek", icon: "🔍" },
   all: { name: "All AIs", color: "gradient-glow", icon: "🌟" }
 };
 
