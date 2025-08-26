@@ -52,16 +52,34 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
-				sidebar: {
-					DEFAULT: 'hsl(var(--sidebar-background))',
-					foreground: 'hsl(var(--sidebar-foreground))',
-					primary: 'hsl(var(--sidebar-primary))',
-					'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-					accent: 'hsl(var(--sidebar-accent))',
-					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-					border: 'hsl(var(--sidebar-border))',
-					ring: 'hsl(var(--sidebar-ring))'
+				chatgpt: {
+					DEFAULT: 'hsl(var(--chatgpt))',
+					foreground: 'hsl(var(--chatgpt-foreground))',
+					muted: 'hsl(var(--chatgpt-muted))'
+				},
+				claude: {
+					DEFAULT: 'hsl(var(--claude))',
+					foreground: 'hsl(var(--claude-foreground))',
+					muted: 'hsl(var(--claude-muted))'
+				},
+				deepseek: {
+					DEFAULT: 'hsl(var(--deepseek))',
+					foreground: 'hsl(var(--deepseek-foreground))',
+					muted: 'hsl(var(--deepseek-muted))'
 				}
+			},
+			backgroundImage: {
+				'gradient-primary': 'var(--gradient-primary)',
+				'gradient-chat': 'var(--gradient-chat)',
+				'gradient-glow': 'var(--gradient-glow)'
+			},
+			boxShadow: {
+				'elegant': 'var(--shadow-elegant)',
+				'glow': 'var(--shadow-glow)'
+			},
+			transitionTimingFunction: {
+				'smooth': 'var(--transition-smooth)',
+				'bounce': 'var(--transition-bounce)'
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
