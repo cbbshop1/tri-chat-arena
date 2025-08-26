@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_files: {
+        Row: {
+          content_preview: string | null
+          created_at: string
+          file_path: string
+          file_size: number
+          file_type: string
+          filename: string
+          id: string
+          session_id: string
+        }
+        Insert: {
+          content_preview?: string | null
+          created_at?: string
+          file_path: string
+          file_size: number
+          file_type: string
+          filename: string
+          id?: string
+          session_id: string
+        }
+        Update: {
+          content_preview?: string | null
+          created_at?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          filename?: string
+          id?: string
+          session_id?: string
+        }
+        Relationships: []
+      }
       chat_sessions: {
         Row: {
           created_at: string
@@ -30,6 +63,33 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      knowledge_base: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          title: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
           created_at?: string
           id?: string
           title?: string

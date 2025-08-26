@@ -5,10 +5,12 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import KnowledgeManager from './KnowledgeManager';
 // import { useAuth } from '@/hooks/useAuth';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
@@ -29,6 +31,23 @@ interface Message {
   created_at: string;
 }
 
+interface ChatFile {
+  id: string;
+  filename: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  content_preview?: string;
+  created_at: string;
+}
+
+interface KnowledgeItem {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
 const AI_CONFIGS = {
   chatgpt: { name: "ChatGPT", color: "chatgpt", icon: "🤖" },
   claude: { name: "Claude", color: "claude", icon: "🧠" },
@@ -43,7 +62,11 @@ export default function ChatInterface() {
   const [input, setInput] = useState("");
   const [selectedAI, setSelectedAI] = useState<AIModel>("all");
   const [loading, setLoading] = useState(false);
+  const [chatFiles, setChatFiles] = useState<ChatFile[]>([]);
+  const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeItem[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   // const { user, signOut } = useAuth();
 
@@ -212,11 +235,15 @@ export default function ChatInterface() {
 
   const callAI = async (ai: SpecificAI, message: string): Promise<string> => {
     const conversationHistory = getConversationHistory();
+    const context = getContextForAI();
     const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
+    
+    // Prepend context to the message if available
+    const messageWithContext = context ? `${context}\n\nUser Message: ${message}` : message;
     
     const { data, error } = await supabase.functions.invoke(functionName, {
       body: { 
-        message,
+        message: messageWithContext,
         conversation_history: conversationHistory
       }
     });
@@ -254,6 +281,144 @@ export default function ChatInterface() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Load knowledge base
+  useEffect(() => {
+    loadKnowledgeBase();
+  }, []);
+
+  const loadKnowledgeBase = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('knowledge_base')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setKnowledgeBase(data || []);
+    } catch (error) {
+      console.error('Error loading knowledge base:', error);
+    }
+  };
+
+  const uploadFile = async (file: File) => {
+    if (!currentSessionId) return;
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${currentSessionId}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('chat-files')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Read file content for preview (if text file)
+      let contentPreview = '';
+      if (file.type.startsWith('text/') || file.name.endsWith('.md')) {
+        contentPreview = await file.text();
+        if (contentPreview.length > 1000) {
+          contentPreview = contentPreview.substring(0, 1000) + '...';
+        }
+      }
+
+      // Save file metadata
+      const { error: dbError } = await supabase
+        .from('chat_files')
+        .insert([{
+          session_id: currentSessionId,
+          filename: file.name,
+          file_path: uploadData.path,
+          file_type: file.type,
+          file_size: file.size,
+          content_preview: contentPreview
+        }]);
+
+      if (dbError) throw dbError;
+
+      toast({
+        title: "File uploaded",
+        description: `${file.name} has been uploaded successfully`,
+      });
+
+      loadChatFiles();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadChatFiles = async () => {
+    if (!currentSessionId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('chat_files')
+        .select('*')
+        .eq('session_id', currentSessionId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setChatFiles(data || []);
+    } catch (error) {
+      console.error('Error loading chat files:', error);
+    }
+  };
+
+  // Load files when session changes
+  useEffect(() => {
+    if (currentSessionId) {
+      loadChatFiles();
+    } else {
+      setChatFiles([]);
+    }
+  }, [currentSessionId]);
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setSelectedFiles(files);
+    files.forEach(uploadFile);
+    // Reset the input
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getContextForAI = () => {
+    let context = '';
+    
+    // Add knowledge base context
+    if (knowledgeBase.length > 0) {
+      context += '\n--- Knowledge Base ---\n';
+      knowledgeBase.forEach(item => {
+        context += `${item.title}:\n${item.content}\n\n`;
+      });
+    }
+
+    // Add file context
+    if (chatFiles.length > 0) {
+      context += '\n--- Uploaded Files ---\n';
+      chatFiles.forEach(file => {
+        if (file.content_preview) {
+          context += `File: ${file.filename}\nContent: ${file.content_preview}\n\n`;
+        } else {
+          context += `File: ${file.filename} (${file.file_type}, ${Math.round(file.file_size / 1024)}KB)\n\n`;
+        }
+      });
+    }
+
+    return context;
   };
 
   const handleSend = async () => {
@@ -318,7 +483,7 @@ export default function ChatInterface() {
   return (
     <div className="flex h-screen bg-gradient-primary">
       {/* Sidebar */}
-      <div className="w-80 border-r border-border bg-card/50 backdrop-blur-sm">
+      <div className="w-80 border-r border-border bg-card/50 backdrop-blur-sm flex flex-col">
         <div className="p-4 border-b border-border">
           <Button onClick={createNewSession} className="w-full" variant="outline">
             <Plus className="w-4 h-4 mr-2" />
@@ -326,40 +491,64 @@ export default function ChatInterface() {
           </Button>
         </div>
         
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {sessions.map((session) => (
-              <div
-                key={session.id}
-                className={cn(
-                  "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
-                  currentSessionId === session.id 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'hover:bg-card/80'
-                )}
-                onClick={() => setCurrentSessionId(session.id)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center min-w-0 flex-1">
-                    <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="truncate text-sm">{session.title}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession(session.id);
-                    }}
+        <Tabs defaultValue="chats" className="flex-1 flex flex-col">
+          <TabsList className="mx-2 mt-2">
+            <TabsTrigger value="chats" className="flex-1">
+              <MessageSquare className="w-4 h-4 mr-1" />
+              Chats
+            </TabsTrigger>
+            <TabsTrigger value="knowledge" className="flex-1">
+              <Bot className="w-4 h-4 mr-1" />
+              Knowledge
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="chats" className="flex-1 mt-0">
+            <ScrollArea className="h-full">
+              <div className="p-2">
+                {sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className={cn(
+                      "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
+                      currentSessionId === session.id 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'hover:bg-card/80'
+                    )}
+                    onClick={() => setCurrentSessionId(session.id)}
                   >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center min-w-0 flex-1">
+                        <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <span className="truncate text-sm">{session.title}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSession(session.id);
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </ScrollArea>
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden">
+            <div className="p-2 h-full">
+              <KnowledgeManager 
+                knowledgeBase={knowledgeBase} 
+                onRefresh={loadKnowledgeBase}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Main Chat Area */}
@@ -505,7 +694,46 @@ export default function ChatInterface() {
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto">
+            {/* Context Info */}
+            {(knowledgeBase.length > 0 || chatFiles.length > 0) && (
+              <div className="mb-3 p-2 bg-card border border-border rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">Available Context:</div>
+                <div className="flex flex-wrap gap-1">
+                  {knowledgeBase.length > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      📚 {knowledgeBase.length} knowledge item{knowledgeBase.length !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                  {chatFiles.map((file) => (
+                    <Badge key={file.id} variant="outline" className="text-xs">
+                      <File className="w-3 h-3 mr-1" />
+                      {file.filename}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+                accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
+              />
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!currentSessionId}
+                className="shrink-0"
+              >
+                <Paperclip className="w-4 h-4" />
+              </Button>
+              
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
