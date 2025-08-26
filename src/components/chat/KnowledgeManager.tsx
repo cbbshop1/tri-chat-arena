@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2, BookOpen, Search, X } from 'lucide-react';
+import { Plus, Edit, Trash2, BookOpen, Search, X, Eye } from 'lucide-react';
 
 interface KnowledgeItem {
   id: string;
@@ -24,7 +24,9 @@ interface KnowledgeManagerProps {
 
 export default function KnowledgeManager({ knowledgeBase, onRefresh }: KnowledgeManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<KnowledgeItem | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,6 +93,11 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
     setTitle(item.title);
     setContent(item.content);
     setIsDialogOpen(true);
+  };
+
+  const handlePreview = (item: KnowledgeItem) => {
+    setPreviewItem(item);
+    setIsPreviewOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -186,6 +193,48 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
         </Dialog>
       </div>
 
+      {/* Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              {previewItem?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                Added {previewItem && new Date(previewItem.created_at).toLocaleDateString()}
+              </div>
+              <div className="prose prose-sm max-w-none">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {previewItem?.content}
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (previewItem) {
+                  handleEdit(previewItem);
+                  setIsPreviewOpen(false);
+                }
+              }}
+              className="gap-2"
+            >
+              <Edit className="w-4 h-4" />
+              Edit
+            </Button>
+            <Button onClick={() => setIsPreviewOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
@@ -214,7 +263,7 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
             </div>
           ) : (
             filteredKnowledge.map((item) => (
-              <Card key={item.id} className="p-4">
+              <Card key={item.id} className="p-4 cursor-pointer hover:bg-card/80 transition-colors" onClick={() => handlePreview(item)}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-sm mb-2 truncate">{item.title}</h3>
@@ -230,7 +279,23 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0"
-                      onClick={() => handleEdit(item)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePreview(item);
+                      }}
+                      title="Preview"
+                    >
+                      <Eye className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(item);
+                      }}
+                      title="Edit"
                     >
                       <Edit className="w-3 h-3" />
                     </Button>
@@ -238,7 +303,11 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(item.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(item.id);
+                      }}
+                      title="Delete"
                     >
                       <Trash2 className="w-3 h-3" />
                     </Button>
