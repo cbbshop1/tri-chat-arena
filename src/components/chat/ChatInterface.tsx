@@ -116,19 +116,9 @@ export default function ChatInterface() {
 
   const createNewSession = async () => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        toast({
-          title: "Error", 
-          description: "Please sign in to create a chat session",
-          variant: "destructive",
-        });
-        return;
-      }
-
       const { data, error } = await supabase
         .from('chat_sessions')
-        .insert([{ title: 'New Chat', user_id: userData.user.id }])
+        .insert([{ title: 'New Chat', user_id: null }])
         .select()
         .single();
 
@@ -297,27 +287,10 @@ export default function ChatInterface() {
       {/* Sidebar */}
       <div className="w-80 border-r border-border bg-card/50 backdrop-blur-sm">
         <div className="p-4 border-b border-border">
-          <Button onClick={createNewSession} className="w-full mb-4" variant="outline">
+          <Button onClick={createNewSession} className="w-full" variant="outline">
             <Plus className="w-4 h-4 mr-2" />
             New Chat
           </Button>
-          
-          {/* User info and sign out */}
-          <div className="p-3 border rounded-lg bg-background/50">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-              <User className="h-4 w-4" />
-              <span className="truncate">{user?.email}</span>
-            </div>
-            <Button
-              onClick={signOut}
-              variant="ghost"
-              size="sm"
-              className="w-full flex items-center gap-2"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </Button>
-          </div>
         </div>
         
         <ScrollArea className="flex-1">
