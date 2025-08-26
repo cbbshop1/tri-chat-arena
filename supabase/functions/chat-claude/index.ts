@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message } = await req.json();
+    const { message, conversation_history = [] } = await req.json();
     const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
 
     if (!anthropicApiKey) {
@@ -30,6 +30,7 @@ serve(async (req) => {
         model: 'claude-3-5-haiku-20241022',
         max_tokens: 500,
         messages: [
+          ...conversation_history,
           { role: 'user', content: message }
         ]
       }),

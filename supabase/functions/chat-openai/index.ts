@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message } = await req.json();
+    const { message, conversation_history = [] } = await req.json();
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!openAIApiKey) {
@@ -28,6 +28,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-4.1-2025-04-14',
         messages: [
+          ...conversation_history,
           { role: 'user', content: message }
         ],
         max_completion_tokens: 500,

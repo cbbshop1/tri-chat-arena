@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message } = await req.json();
+    const { message, conversation_history = [] } = await req.json();
     const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
 
     if (!deepseekApiKey) {
@@ -28,6 +28,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [
+          ...conversation_history,
           { role: 'user', content: message }
         ],
         max_tokens: 500,
