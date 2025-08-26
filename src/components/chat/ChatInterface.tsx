@@ -5,9 +5,10 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 // import { useAuth } from '@/hooks/useAuth';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
@@ -224,6 +225,37 @@ export default function ChatInterface() {
     return data.reply;
   };
 
+  const forwardMessage = async (content: string, fromAI: SpecificAI, toAI: SpecificAI) => {
+    if (!currentSessionId) return;
+    
+    setLoading(true);
+    try {
+      // Create a forwarded message prompt
+      const forwardPrompt = `[Forwarded from ${AI_CONFIGS[fromAI].name}]: ${content}`;
+      
+      // Call the target AI
+      const reply = await callAI(toAI, forwardPrompt);
+      await saveMessage(reply, 'assistant', toAI);
+      
+      // Reload messages to show the forwarded response
+      await loadMessages(currentSessionId);
+      
+      toast({
+        title: "Message forwarded",
+        description: `Forwarded to ${AI_CONFIGS[toAI].name}`,
+      });
+    } catch (error) {
+      console.error(`Error forwarding to ${toAI}:`, error);
+      toast({
+        title: "Error",
+        description: `Failed to forward to ${AI_CONFIGS[toAI].name}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || loading || !currentSessionId) return;
 
@@ -422,11 +454,36 @@ export default function ChatInterface() {
                       >
                         {AI_CONFIGS[message.ai_model].name}
                       </Badge>
-                    )}
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(message.created_at).toLocaleTimeString()}
-                    </p>
+                     )}
+                     <div className="flex items-start justify-between gap-2">
+                       <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+                       {message.role === 'assistant' && message.ai_model && (
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0">
+                               <Forward className="h-3 w-3" />
+                             </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent align="end">
+                             {Object.entries(AI_CONFIGS)
+                               .filter(([key]) => key !== 'all' && key !== message.ai_model)
+                               .map(([key, config]) => (
+                                 <DropdownMenuItem
+                                   key={key}
+                                   onClick={() => forwardMessage(message.content, message.ai_model!, key as SpecificAI)}
+                                   className="gap-2"
+                                 >
+                                   <span>{config.icon}</span>
+                                   Forward to {config.name}
+                                 </DropdownMenuItem>
+                               ))}
+                           </DropdownMenuContent>
+                         </DropdownMenu>
+                       )}
+                     </div>
+                     <p className="text-xs text-muted-foreground mt-1">
+                       {new Date(message.created_at).toLocaleTimeString()}
+                     </p>
                   </Card>
                 </div>
               ))}
