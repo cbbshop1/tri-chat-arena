@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/useAuth';
+// import { useAuth } from '@/hooks/useAuth';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
@@ -44,7 +44,7 @@ export default function ChatInterface() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { user, signOut } = useAuth();
+  // const { user, signOut } = useAuth();
 
   // Load sessions on mount
   useEffect(() => {
