@@ -5,9 +5,10 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
@@ -43,6 +44,7 @@ export default function ChatInterface() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user, signOut } = useAuth();
 
   // Load sessions on mount
   useEffect(() => {
@@ -295,10 +297,27 @@ export default function ChatInterface() {
       {/* Sidebar */}
       <div className="w-80 border-r border-border bg-card/50 backdrop-blur-sm">
         <div className="p-4 border-b border-border">
-          <Button onClick={createNewSession} className="w-full" variant="outline">
+          <Button onClick={createNewSession} className="w-full mb-4" variant="outline">
             <Plus className="w-4 h-4 mr-2" />
             New Chat
           </Button>
+          
+          {/* User info and sign out */}
+          <div className="p-3 border rounded-lg bg-background/50">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <User className="h-4 w-4" />
+              <span className="truncate">{user?.email}</span>
+            </div>
+            <Button
+              onClick={signOut}
+              variant="ghost"
+              size="sm"
+              className="w-full flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
         </div>
         
         <ScrollArea className="flex-1">
