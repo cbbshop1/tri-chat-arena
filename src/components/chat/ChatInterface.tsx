@@ -226,15 +226,20 @@ export default function ChatInterface() {
     }
   };
 
-  const getConversationHistory = () => {
-    return messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content
-    }));
+  const getConversationHistory = (targetAI?: SpecificAI) => {
+    return messages
+      .filter(msg => {
+        // Include user messages and only assistant messages from the target AI
+        return msg.role === 'user' || (msg.role === 'assistant' && msg.ai_model === targetAI);
+      })
+      .map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
   };
 
   const callAI = async (ai: SpecificAI, message: string): Promise<string> => {
-    const conversationHistory = getConversationHistory();
+    const conversationHistory = getConversationHistory(ai);
     const context = getContextForAI();
     const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
     
