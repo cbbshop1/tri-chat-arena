@@ -28,6 +28,7 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   ai_model?: SpecificAI;
+  target_ai?: SpecificAI | 'all';
   created_at: string;
 }
 
@@ -124,6 +125,7 @@ export default function ChatInterface() {
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
         ai_model: msg.ai_model as SpecificAI | undefined,
+        target_ai: msg.target_ai as SpecificAI | 'all' | undefined,
         created_at: msg.created_at
       }));
       
@@ -193,7 +195,7 @@ export default function ChatInterface() {
     }
   };
 
-  const saveMessage = async (content: string, role: 'user' | 'assistant', aiModel?: SpecificAI, targetAI?: SpecificAI) => {
+  const saveMessage = async (content: string, role: 'user' | 'assistant', aiModel?: SpecificAI, targetAI?: SpecificAI | 'all') => {
     if (!currentSessionId) return;
 
     try {
