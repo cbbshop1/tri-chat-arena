@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -435,6 +435,75 @@ export default function ChatInterface() {
     return context;
   };
 
+  const exportChatSession = async () => {
+    if (!currentSessionId) {
+      toast({
+        title: "Error",
+        description: "No chat session selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const currentSession = sessions.find(s => s.id === currentSessionId);
+      if (!currentSession) {
+        throw new Error("Session not found");
+      }
+
+      const exportData = {
+        session: {
+          id: currentSession.id,
+          title: currentSession.title,
+          created_at: currentSession.created_at,
+          updated_at: currentSession.updated_at
+        },
+        messages: messages.map(msg => ({
+          id: msg.id,
+          content: msg.content,
+          role: msg.role,
+          ai_model: msg.ai_model,
+          target_ai: msg.target_ai,
+          created_at: msg.created_at
+        })),
+        files: chatFiles.map(file => ({
+          id: file.id,
+          filename: file.filename,
+          file_type: file.file_type,
+          file_size: file.file_size,
+          content_preview: file.content_preview,
+          created_at: file.created_at
+        })),
+        exported_at: new Date().toISOString()
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: 'application/json'
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chat-session-${currentSession.title.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Success",
+        description: "Chat session exported successfully",
+      });
+    } catch (error) {
+      console.error('Error exporting chat session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to export chat session",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || loading || !currentSessionId) return;
 
@@ -577,8 +646,19 @@ export default function ChatInterface() {
             </h1>
           </div>
           
-          {/* AI Selector */}
+          {/* AI Selector & Export */}
           <div className="flex gap-2">
+            {currentSessionId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportChatSession}
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export Chat
+              </Button>
+            )}
             <Button
               variant={selectedAI === "all" ? "default" : "secondary"}
               size="sm"
