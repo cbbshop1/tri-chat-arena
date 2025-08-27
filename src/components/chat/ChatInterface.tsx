@@ -125,7 +125,7 @@ export default function ChatInterface() {
         content: msg.content,
         role: msg.role as 'user' | 'assistant',
         ai_model: msg.ai_model as SpecificAI | undefined,
-        target_ai: msg.target_ai as SpecificAI | 'all' | undefined,
+        target_ai: (msg as any).target_ai as SpecificAI | 'all' | undefined || 'all',
         created_at: msg.created_at
       }));
       

@@ -106,6 +106,7 @@ export type Database = {
           id: string
           role: string
           session_id: string
+          target_ai: string | null
         }
         Insert: {
           ai_model?: string | null
@@ -114,6 +115,7 @@ export type Database = {
           id?: string
           role: string
           session_id: string
+          target_ai?: string | null
         }
         Update: {
           ai_model?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           id?: string
           role?: string
           session_id?: string
+          target_ai?: string | null
         }
         Relationships: [
           {
