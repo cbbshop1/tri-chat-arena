@@ -193,7 +193,7 @@ export default function ChatInterface() {
     }
   };
 
-  const saveMessage = async (content: string, role: 'user' | 'assistant', aiModel?: SpecificAI) => {
+  const saveMessage = async (content: string, role: 'user' | 'assistant', aiModel?: SpecificAI, targetAI?: SpecificAI) => {
     if (!currentSessionId) return;
 
     try {
@@ -203,7 +203,8 @@ export default function ChatInterface() {
           session_id: currentSessionId,
           content,
           role,
-          ai_model: aiModel
+          ai_model: aiModel,
+          target_ai: targetAI // Track which AI this message was intended for
         }]);
 
       if (error) throw error;
@@ -229,8 +230,14 @@ export default function ChatInterface() {
   const getConversationHistory = (targetAI?: SpecificAI) => {
     return messages
       .filter(msg => {
-        // Include user messages and only assistant messages from the target AI
-        return msg.role === 'user' || (msg.role === 'assistant' && msg.ai_model === targetAI);
+        if (msg.role === 'assistant') {
+          // Only include assistant messages from the target AI
+          return msg.ai_model === targetAI;
+        } else {
+          // For user messages, only include those intended for this AI or forwarded messages
+          return msg.target_ai === targetAI || msg.target_ai === 'all' || 
+                 (msg.content && msg.content.includes('[Forwarded from'));
+        }
       })
       .map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
@@ -434,8 +441,9 @@ export default function ChatInterface() {
     setLoading(true);
 
     try {
-      // Save user message
-      await saveMessage(message, 'user');
+      // Save user message with target AI information
+      const targetAI = selectedAI === "all" ? "all" : selectedAI as SpecificAI;
+      await saveMessage(message, 'user', undefined, targetAI);
       await loadMessages(currentSessionId);
 
       // Update session title if it's the first message
