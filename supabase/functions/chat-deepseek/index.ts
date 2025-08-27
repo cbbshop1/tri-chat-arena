@@ -31,7 +31,6 @@ serve(async (req) => {
           ...conversation_history,
           { role: 'user', content: message }
         ],
-        max_tokens: 500,
         temperature: 0.7
       }),
     });
