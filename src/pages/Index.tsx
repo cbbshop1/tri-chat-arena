@@ -1,5 +1,6 @@
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useAuth } from "@/hooks/useAuth";
+import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 
 const Index = () => {
   const { loading } = useAuth();
@@ -15,7 +16,14 @@ const Index = () => {
     );
   }
 
-  return <ChatInterface />;
+  return (
+    <div className="min-h-screen bg-gradient-primary">
+      <div className="container mx-auto py-4">
+        <SubscriptionBanner />
+      </div>
+      <ChatInterface />
+    </div>
+  );
 };
 
 export default Index;
