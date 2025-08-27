@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useUsageLimit } from '@/hooks/useUsageLimit';
 import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -69,6 +71,8 @@ export default function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { subscribed } = useSubscription();
+  const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
   // const { user, signOut } = useAuth();
 
   // Load sessions on mount
@@ -507,11 +511,35 @@ export default function ChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || loading || !currentSessionId) return;
 
+    // Check usage limits for non-subscribers
+    if (!canSendMessage) {
+      toast({
+        title: "Daily limit reached",
+        description: `You've reached your daily limit of ${DAILY_MESSAGE_LIMIT} messages. Subscribe for unlimited access.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const message = input.trim();
     setInput("");
     setLoading(true);
 
     try {
+      // Increment usage count for non-subscribers
+      if (!subscribed) {
+        const canContinue = await incrementUsage();
+        if (!canContinue) {
+          toast({
+            title: "Daily limit reached",
+            description: `You've reached your daily limit of ${DAILY_MESSAGE_LIMIT} messages. Subscribe for unlimited access.`,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
       // Save user message with target AI information
       const targetAI = selectedAI === "all" ? "all" : selectedAI as SpecificAI;
       await saveMessage(message, 'user', undefined, targetAI);
@@ -849,10 +877,22 @@ export default function ChatInterface() {
                 )}
               </Button>
             </div>
-            <div className="flex items-center justify-center mt-2">
+            <div className="flex items-center justify-between mt-2">
               <Badge variant="secondary" className="text-xs">
                 {selectedAI === "all" ? "Broadcasting to all AIs" : `Chatting with ${AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}`}
               </Badge>
+              
+              {!subscribed && (
+                <Badge 
+                  variant={remainingMessages <= 5 ? "destructive" : "outline"} 
+                  className="text-xs"
+                >
+                  {remainingMessages === Infinity 
+                    ? "Unlimited" 
+                    : `${remainingMessages}/${DAILY_MESSAGE_LIMIT} messages left today`
+                  }
+                </Badge>
+              )}
             </div>
           </div>
         </div>
