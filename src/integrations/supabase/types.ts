@@ -71,6 +71,36 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_usage: {
+        Row: {
+          created_at: string
+          date: string
+          email: string | null
+          id: string
+          message_count: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          email?: string | null
+          id?: string
+          message_count?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          email?: string | null
+          id?: string
+          message_count?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       knowledge_base: {
         Row: {
           content: string
@@ -177,7 +207,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_daily_usage: {
+        Args: { p_email?: string; p_user_id?: string }
+        Returns: number
+      }
+      increment_daily_usage: {
+        Args: { p_email?: string; p_user_id?: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
