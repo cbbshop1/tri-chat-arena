@@ -262,7 +262,8 @@ export default function ChatInterface() {
     const { data, error } = await supabase.functions.invoke(functionName, {
       body: { 
         message: messageWithContext,
-        conversation_history: conversationHistory
+        conversation_history: conversationHistory,
+        sessionId: currentSessionId // Add sessionId for usage tracking
       }
     });
 
