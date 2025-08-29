@@ -50,21 +50,31 @@ export const useSubscription = () => {
     }
 
     try {
+      console.log('Creating checkout session...');
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
 
-      if (error) throw error;
-      if (data.url) {
+      console.log('Checkout response:', { data, error });
+      
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(error.message || 'Failed to create checkout session');
+      }
+      
+      if (data?.url) {
+        console.log('Opening checkout URL:', data.url);
         window.open(data.url, '_blank');
+      } else {
+        throw new Error('No checkout URL received');
       }
     } catch (error) {
       console.error('Error creating checkout:', error);
       toast({
         title: "Checkout Error",
-        description: "Failed to create checkout session. Please try again.",
+        description: `Failed to create checkout session: ${error.message}`,
         variant: "destructive",
       });
     }
