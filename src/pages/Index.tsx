@@ -9,6 +9,8 @@ const Index = () => {
   const { loading, user, signOut } = useAuth();
   const navigate = useNavigate();
 
+  console.log("Auth state:", { loading, user: !!user, email: user?.email });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-primary">
