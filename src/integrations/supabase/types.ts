@@ -128,6 +128,78 @@ export type Database = {
         }
         Relationships: []
       }
+      ledger_batches: {
+        Row: {
+          created_at: string
+          entry_count: number
+          from_id: string | null
+          id: string
+          l2_block_number: number | null
+          l2_tx: string | null
+          root_hash: string
+          to_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entry_count?: number
+          from_id?: string | null
+          id?: string
+          l2_block_number?: number | null
+          l2_tx?: string | null
+          root_hash: string
+          to_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entry_count?: number
+          from_id?: string | null
+          id?: string
+          l2_block_number?: number | null
+          l2_tx?: string | null
+          root_hash?: string
+          to_id?: string | null
+        }
+        Relationships: []
+      }
+      ledger_entries: {
+        Row: {
+          agent_id: string
+          arweave_tx: string | null
+          batch_id: string | null
+          body_hash: string
+          body_json: Json
+          created_at: string
+          entry_type: string
+          id: string
+          l2_tx: string | null
+          prev_hash: string | null
+        }
+        Insert: {
+          agent_id: string
+          arweave_tx?: string | null
+          batch_id?: string | null
+          body_hash: string
+          body_json: Json
+          created_at?: string
+          entry_type: string
+          id?: string
+          l2_tx?: string | null
+          prev_hash?: string | null
+        }
+        Update: {
+          agent_id?: string
+          arweave_tx?: string | null
+          batch_id?: string | null
+          body_hash?: string
+          body_json?: Json
+          created_at?: string
+          entry_type?: string
+          id?: string
+          l2_tx?: string | null
+          prev_hash?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           ai_model: string | null
@@ -204,12 +276,39 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ledger_verification: {
+        Row: {
+          agent_id: string | null
+          batch_id: string | null
+          batch_l2_tx: string | null
+          batch_root_hash: string | null
+          body_hash: string | null
+          body_json: Json | null
+          created_at: string | null
+          entry_type: string | null
+          id: string | null
+          l2_block_number: number | null
+          prev_hash: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      compute_canonical_hash: {
+        Args: { data: Json }
+        Returns: string
+      }
+      create_ledger_batch: {
+        Args: { p_entry_ids: string[] }
+        Returns: string
+      }
       get_daily_usage: {
         Args: { p_email?: string; p_user_id?: string }
         Returns: number
+      }
+      get_prev_hash: {
+        Args: { p_agent_id: string }
+        Returns: string
       }
       increment_daily_usage: {
         Args: { p_email?: string; p_user_id?: string }
