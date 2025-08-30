@@ -11,6 +11,31 @@ export const SubscriptionBanner = () => {
   const { subscribed, loading, createCheckout, openCustomerPortal } = useSubscription();
   const { toast } = useToast();
 
+  // DEVELOPER BYPASS: Hide subscription banner in development mode
+  const DEVELOPER_MODE = true;
+  
+  if (DEVELOPER_MODE) {
+    return (
+      <Card className="bg-gradient-to-r from-green-500/10 to-green-400/5 border-green-500/20">
+        <CardContent className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <Crown className="h-5 w-5 text-green-500" />
+            <div>
+              <p className="font-medium text-green-600">🔓 Developer Mode Active</p>
+              <p className="text-sm text-muted-foreground">
+                Unlimited AI access enabled for development
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" disabled>
+            <CreditCard className="h-4 w-4 mr-2" />
+            Dev Mode
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!user || loading) return null;
 
   if (subscribed) {

@@ -5,6 +5,9 @@ import { useSubscription } from "./useSubscription";
 
 const DAILY_MESSAGE_LIMIT = 20;
 
+// 🔓 DEVELOPER BYPASS: Set to true for unlimited usage during development
+const DEVELOPER_MODE = true;
+
 export const useUsageLimit = () => {
   const { user } = useAuth();
   const { subscribed } = useSubscription();
@@ -12,6 +15,13 @@ export const useUsageLimit = () => {
   const [loading, setLoading] = useState(true);
 
   const checkDailyUsage = async () => {
+    if (DEVELOPER_MODE) {
+      console.log("🔓 DEVELOPER MODE: Usage checks bypassed");
+      setDailyUsage(0);
+      setLoading(false);
+      return;
+    }
+
     if (subscribed) {
       setDailyUsage(0);
       setLoading(false);
@@ -37,6 +47,11 @@ export const useUsageLimit = () => {
   };
 
   const incrementUsage = async (): Promise<boolean> => {
+    if (DEVELOPER_MODE) {
+      console.log("🔓 DEVELOPER MODE: Usage increment bypassed");
+      return true;
+    }
+
     if (subscribed) return true;
 
     try {
@@ -60,11 +75,13 @@ export const useUsageLimit = () => {
   };
 
   const canSendMessage = () => {
+    if (DEVELOPER_MODE) return true;
     if (subscribed) return true;
     return dailyUsage < DAILY_MESSAGE_LIMIT;
   };
 
   const remainingMessages = () => {
+    if (DEVELOPER_MODE) return 999; // Show high number in dev mode
     if (subscribed) return Infinity;
     return Math.max(0, DAILY_MESSAGE_LIMIT - dailyUsage);
   };
@@ -74,12 +91,13 @@ export const useUsageLimit = () => {
   }, [user, subscribed]);
 
   return {
-    dailyUsage,
+    dailyUsage: DEVELOPER_MODE ? 0 : dailyUsage,
     loading,
     canSendMessage: canSendMessage(),
     remainingMessages: remainingMessages(),
     incrementUsage,
     checkDailyUsage,
-    DAILY_MESSAGE_LIMIT
+    DAILY_MESSAGE_LIMIT,
+    isDeveloperMode: DEVELOPER_MODE
   };
 };
