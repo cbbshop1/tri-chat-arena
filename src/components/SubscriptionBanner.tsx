@@ -3,10 +3,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Crown, CreditCard } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 export const SubscriptionBanner = () => {
   const { user } = useAuth();
   const { subscribed, loading, createCheckout, openCustomerPortal } = useSubscription();
+  const { toast } = useToast();
 
   if (!user || loading) return null;
 
@@ -41,7 +44,39 @@ export const SubscriptionBanner = () => {
             Get unlimited access to all AI models for just $5/month
           </p>
         </div>
-        <Button onClick={createCheckout}>
+        <Button onClick={async () => {
+          // Test health first
+          try {
+            console.log("Testing edge function health...");
+            const healthCheck = await supabase.functions.invoke('test-health');
+            console.log('Health check result:', healthCheck);
+            
+            if (healthCheck.error) {
+              toast({
+                title: "System Health Issue",
+                description: `Health check failed: ${healthCheck.error.message}`,
+                variant: "destructive",
+              });
+              return;
+            }
+            
+            toast({
+              title: "System Health Check",
+              description: "Edge functions are working! Proceeding with checkout...",
+            });
+          } catch (error) {
+            console.error('Health check failed:', error);
+            toast({
+              title: "System Unavailable", 
+              description: "Edge functions are not responding. Please try again later.",
+              variant: "destructive",
+            });
+            return;
+          }
+          
+          // If health check passes, proceed with checkout
+          createCheckout();
+        }}>
           Subscribe $5/mo
         </Button>
       </CardContent>
