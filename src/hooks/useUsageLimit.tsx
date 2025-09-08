@@ -5,27 +5,13 @@ import { useSubscription } from "./useSubscription";
 
 const DAILY_MESSAGE_LIMIT = 20;
 
-// 🔓 DEVELOPER EMAILS: Users with these emails get unlimited access
-const DEVELOPER_EMAILS = ['cbbsherpa1@gmail.com', 'cbbsherpa@outlook.com'];
-
 export const useUsageLimit = () => {
   const { user } = useAuth();
   const { subscribed } = useSubscription();
   const [dailyUsage, setDailyUsage] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const isDeveloperUser = () => {
-    return user?.email && DEVELOPER_EMAILS.includes(user.email);
-  };
-
   const checkDailyUsage = async () => {
-    if (isDeveloperUser()) {
-      console.log("🔓 DEVELOPER MODE: Usage checks bypassed for", user?.email);
-      setDailyUsage(0);
-      setLoading(false);
-      return;
-    }
-
     if (subscribed) {
       setDailyUsage(0);
       setLoading(false);
@@ -51,11 +37,6 @@ export const useUsageLimit = () => {
   };
 
   const incrementUsage = async (): Promise<boolean> => {
-    if (isDeveloperUser()) {
-      console.log("🔓 DEVELOPER MODE: Usage increment bypassed for", user?.email);
-      return true;
-    }
-
     if (subscribed) return true;
 
     try {
@@ -79,13 +60,11 @@ export const useUsageLimit = () => {
   };
 
   const canSendMessage = () => {
-    if (isDeveloperUser()) return true;
     if (subscribed) return true;
     return dailyUsage < DAILY_MESSAGE_LIMIT;
   };
 
   const remainingMessages = () => {
-    if (isDeveloperUser()) return 999; // Show high number in dev mode
     if (subscribed) return Infinity;
     return Math.max(0, DAILY_MESSAGE_LIMIT - dailyUsage);
   };
@@ -95,13 +74,12 @@ export const useUsageLimit = () => {
   }, [user, subscribed]);
 
   return {
-    dailyUsage: isDeveloperUser() ? 0 : dailyUsage,
+    dailyUsage,
     loading,
     canSendMessage: canSendMessage(),
     remainingMessages: remainingMessages(),
     incrementUsage,
     checkDailyUsage,
-    DAILY_MESSAGE_LIMIT,
-    isDeveloperMode: isDeveloperUser()
+    DAILY_MESSAGE_LIMIT
   };
 };
