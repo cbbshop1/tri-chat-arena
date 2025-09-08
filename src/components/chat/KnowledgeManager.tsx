@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { Plus, Edit, Trash2, BookOpen, Search, X, Eye } from 'lucide-react';
 
 interface KnowledgeItem {
@@ -31,6 +32,7 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
   const [content, setContent] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const filteredKnowledge = knowledgeBase.filter(item =>
     item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -40,6 +42,15 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
+
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to save knowledge items",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       if (editingItem) {
@@ -62,7 +73,7 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
           .insert([{
             title: title.trim(),
             content: content.trim(),
-            user_id: null // For development - anonymous access
+            user_id: user.id
           }]);
 
         if (error) throw error;
