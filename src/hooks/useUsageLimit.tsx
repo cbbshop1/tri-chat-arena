@@ -19,11 +19,12 @@ export const useUsageLimit = () => {
     }
 
     try {
-      const identifier = user?.id || 'anonymous';
+      // For anonymous users, generate a consistent session-based identifier
+      const sessionId = user?.id || `anon-${Date.now()}`;
       
       const { data, error } = await supabase.rpc('get_daily_usage', {
         p_user_id: user?.id || null,
-        p_email: user?.email || identifier
+        p_email: user?.email || sessionId
       });
 
       if (error) throw error;
@@ -40,11 +41,12 @@ export const useUsageLimit = () => {
     if (subscribed) return true;
 
     try {
-      const identifier = user?.id || 'anonymous';
+      // For anonymous users, generate a consistent session-based identifier
+      const sessionId = user?.id || `anon-${Date.now()}`;
       
       const { data, error } = await supabase.rpc('increment_daily_usage', {
         p_user_id: user?.id || null,
-        p_email: user?.email || identifier
+        p_email: user?.email || sessionId
       });
 
       if (error) throw error;
