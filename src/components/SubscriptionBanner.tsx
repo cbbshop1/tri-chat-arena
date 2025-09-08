@@ -11,10 +11,11 @@ export const SubscriptionBanner = () => {
   const { subscribed, loading, createCheckout, openCustomerPortal } = useSubscription();
   const { toast } = useToast();
 
-  // DEVELOPER BYPASS: Hide subscription banner in development mode
-  const DEVELOPER_MODE = true;
+  // 🔓 DEVELOPER EMAILS: Users with these emails get unlimited access
+  const DEVELOPER_EMAILS = ['cbbsherpa1@gmail.com', 'cbbsherpa@outlook.com'];
+  const isDeveloperUser = user?.email && DEVELOPER_EMAILS.includes(user.email);
   
-  if (DEVELOPER_MODE) {
+  if (isDeveloperUser) {
     return (
       <Card className="bg-gradient-to-r from-green-500/10 to-green-400/5 border-green-500/20">
         <CardContent className="flex items-center justify-between p-4">
@@ -23,7 +24,7 @@ export const SubscriptionBanner = () => {
             <div>
               <p className="font-medium text-green-600">🔓 Developer Mode Active</p>
               <p className="text-sm text-muted-foreground">
-                Unlimited AI access enabled for development
+                Unlimited AI access enabled for {user?.email}
               </p>
             </div>
           </div>

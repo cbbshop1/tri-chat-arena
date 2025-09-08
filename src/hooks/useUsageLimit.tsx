@@ -5,8 +5,8 @@ import { useSubscription } from "./useSubscription";
 
 const DAILY_MESSAGE_LIMIT = 20;
 
-// 🔓 DEVELOPER BYPASS: Set to true for unlimited usage during development
-const DEVELOPER_MODE = true;
+// 🔓 DEVELOPER EMAILS: Users with these emails get unlimited access
+const DEVELOPER_EMAILS = ['cbbsherpa1@gmail.com', 'cbbsherpa@outlook.com'];
 
 export const useUsageLimit = () => {
   const { user } = useAuth();
@@ -14,9 +14,13 @@ export const useUsageLimit = () => {
   const [dailyUsage, setDailyUsage] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const isDeveloperUser = () => {
+    return user?.email && DEVELOPER_EMAILS.includes(user.email);
+  };
+
   const checkDailyUsage = async () => {
-    if (DEVELOPER_MODE) {
-      console.log("🔓 DEVELOPER MODE: Usage checks bypassed");
+    if (isDeveloperUser()) {
+      console.log("🔓 DEVELOPER MODE: Usage checks bypassed for", user?.email);
       setDailyUsage(0);
       setLoading(false);
       return;
@@ -47,8 +51,8 @@ export const useUsageLimit = () => {
   };
 
   const incrementUsage = async (): Promise<boolean> => {
-    if (DEVELOPER_MODE) {
-      console.log("🔓 DEVELOPER MODE: Usage increment bypassed");
+    if (isDeveloperUser()) {
+      console.log("🔓 DEVELOPER MODE: Usage increment bypassed for", user?.email);
       return true;
     }
 
@@ -75,13 +79,13 @@ export const useUsageLimit = () => {
   };
 
   const canSendMessage = () => {
-    if (DEVELOPER_MODE) return true;
+    if (isDeveloperUser()) return true;
     if (subscribed) return true;
     return dailyUsage < DAILY_MESSAGE_LIMIT;
   };
 
   const remainingMessages = () => {
-    if (DEVELOPER_MODE) return 999; // Show high number in dev mode
+    if (isDeveloperUser()) return 999; // Show high number in dev mode
     if (subscribed) return Infinity;
     return Math.max(0, DAILY_MESSAGE_LIMIT - dailyUsage);
   };
@@ -91,13 +95,13 @@ export const useUsageLimit = () => {
   }, [user, subscribed]);
 
   return {
-    dailyUsage: DEVELOPER_MODE ? 0 : dailyUsage,
+    dailyUsage: isDeveloperUser() ? 0 : dailyUsage,
     loading,
     canSendMessage: canSendMessage(),
     remainingMessages: remainingMessages(),
     incrementUsage,
     checkDailyUsage,
     DAILY_MESSAGE_LIMIT,
-    isDeveloperMode: DEVELOPER_MODE
+    isDeveloperMode: isDeveloperUser()
   };
 };
