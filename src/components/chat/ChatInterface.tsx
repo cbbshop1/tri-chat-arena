@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KnowledgeManager from './KnowledgeManager';
-// import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
@@ -73,7 +73,7 @@ export default function ChatInterface() {
   const { toast } = useToast();
   const { subscribed } = useSubscription();
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
-  // const { user, signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   // Load sessions on mount
   useEffect(() => {
@@ -146,10 +146,18 @@ export default function ChatInterface() {
 
   const createNewSession = async () => {
     try {
-      // For development - create session without auth check
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to create a chat session",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('chat_sessions')
-        .insert([{ title: 'New Chat', user_id: null }])
+        .insert([{ title: 'New Chat', user_id: user.id }])
         .select()
         .single();
 
