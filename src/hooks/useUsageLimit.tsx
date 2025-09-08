@@ -18,13 +18,17 @@ export const useUsageLimit = () => {
       return;
     }
 
+    // Only check usage for authenticated users
+    if (!user?.id) {
+      setDailyUsage(0);
+      setLoading(false);
+      return;
+    }
+
     try {
-      // For anonymous users, generate a consistent session-based identifier
-      const sessionId = user?.id || `anon-${Date.now()}`;
-      
       const { data, error } = await supabase.rpc('get_daily_usage', {
-        p_user_id: user?.id || null,
-        p_email: user?.email || sessionId
+        p_user_id: user.id,
+        p_email: null // Removed email tracking for security
       });
 
       if (error) throw error;
@@ -40,13 +44,13 @@ export const useUsageLimit = () => {
   const incrementUsage = async (): Promise<boolean> => {
     if (subscribed) return true;
 
+    // Only allow usage tracking for authenticated users
+    if (!user?.id) return false;
+
     try {
-      // For anonymous users, generate a consistent session-based identifier
-      const sessionId = user?.id || `anon-${Date.now()}`;
-      
       const { data, error } = await supabase.rpc('increment_daily_usage', {
-        p_user_id: user?.id || null,
-        p_email: user?.email || sessionId
+        p_user_id: user.id,
+        p_email: null // Removed email tracking for security
       });
 
       if (error) throw error;
