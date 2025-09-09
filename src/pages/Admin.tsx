@@ -166,7 +166,7 @@ const Admin = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>User ID</TableHead>
+                        <TableHead>User</TableHead>
                         <TableHead>Role</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead>Actions</TableHead>
@@ -175,8 +175,12 @@ const Admin = () => {
                     <TableBody>
                       {users.map((userRole) => (
                         <TableRow key={userRole.id}>
-                          <TableCell className="font-mono text-sm">
-                            {userRole.user_id.slice(0, 8)}...
+                          <TableCell>
+                            {userRole.user_id === user?.id ? (
+                              <span className="font-semibold text-primary">You ({user.email})</span>
+                            ) : (
+                              <span className="font-mono text-sm">{userRole.user_id.slice(0, 8)}...</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant={userRole.role === 'admin' ? 'default' : 'secondary'}>
