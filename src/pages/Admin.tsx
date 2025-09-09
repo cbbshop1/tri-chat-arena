@@ -1,149 +1,106 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useRole } from "@/hooks/useRole";
-import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Shield, Users, MessageSquare, CreditCard, ArrowLeft } from "lucide-react";
-
-interface User {
-  id: string;
-  email: string;
-  created_at: string;
-  role: 'admin' | 'user';
-}
-
-interface Subscriber {
-  id: string;
-  email: string;
-  subscribed: boolean;
-  subscription_tier: string | null;
-  subscription_end: string | null;
-}
-
-interface DailyUsage {
-  id: string;
-  user_id: string;
-  date: string;
-  message_count: number;
-}
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useRoles } from "@/hooks/useRoles";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, Users, CreditCard, MessageSquare, UserCheck, Crown } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 const Admin = () => {
-  const { isAdmin, loading: roleLoading } = useRole();
-  const { user, loading: authLoading } = useAuth();
-  const { toast } = useToast();
+  const { user } = useAuth();
+  const { isAdmin, loading: roleLoading } = useRoles();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
-  const [users, setUsers] = useState<User[]>([]);
-  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
-  const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-      return;
-    }
-
     if (!roleLoading && !isAdmin) {
       navigate("/");
-      toast({
-        variant: "destructive",
-        title: "Access Denied",
-        description: "You need admin privileges to access this page.",
-      });
       return;
     }
 
     if (isAdmin) {
-      fetchData();
+      loadAdminData();
     }
-  }, [isAdmin, roleLoading, user, authLoading, navigate, toast]);
+  }, [isAdmin, roleLoading, navigate]);
 
-  const fetchData = async () => {
+  const loadAdminData = async () => {
     try {
-      // Fetch users with their roles
-      const { data: userRoles, error: userRolesError } = await supabase
+      // Load users with their roles
+      const { data: usersData, error: usersError } = await supabase
         .from('user_roles')
-        .select(`
-          user_id,
-          role,
-          created_at
-        `);
+        .select('*, user_id')
+        .order('created_at', { ascending: false });
 
-      if (userRolesError) throw userRolesError;
+      if (usersError) throw usersError;
+      setUsers(usersData || []);
 
-      // For demo purposes, we'll use the user_roles data to simulate user info
-      const usersData = userRoles.map(ur => ({
-        id: ur.user_id,
-        email: `user-${ur.user_id.slice(-8)}@example.com`, // Simulated email
-        created_at: ur.created_at,
-        role: ur.role as 'admin' | 'user'
-      }));
-
-      setUsers(usersData);
-
-      // Fetch subscribers
+      // Load subscribers
       const { data: subscribersData, error: subscribersError } = await supabase
         .from('subscribers')
-        .select('*');
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (subscribersError) throw subscribersError;
       setSubscribers(subscribersData || []);
 
-      // Fetch daily usage
-      const { data: usageData, error: usageError } = await supabase
-        .from('daily_usage')
+      // Load chat sessions
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('chat_sessions')
         .select('*')
-        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(50);
 
-      if (usageError) throw usageError;
-      setDailyUsage(usageData || []);
+      if (sessionsError) throw sessionsError;
+      setSessions(sessionsData || []);
 
     } catch (error) {
-      console.error('Error fetching admin data:', error);
+      console.error('Error loading admin data:', error);
       toast({
-        variant: "destructive",
         title: "Error",
-        description: "Failed to load admin data.",
+        description: "Failed to load admin data",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: 'admin' | 'user') => {
+  const makeAdmin = async (userId: string) => {
     try {
       const { error } = await supabase
         .from('user_roles')
-        .update({ role: newRole })
-        .eq('user_id', userId);
+        .insert({ user_id: userId, role: 'admin' })
+        .select();
 
       if (error) throw error;
 
-      setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
-      
       toast({
-        title: "Role Updated",
-        description: `User role updated to ${newRole}.`,
+        title: "Success",
+        description: "User promoted to admin",
       });
+      
+      loadAdminData();
     } catch (error) {
-      console.error('Error updating role:', error);
+      console.error('Error making user admin:', error);
       toast({
-        variant: "destructive",
         title: "Error",
-        description: "Failed to update user role.",
+        description: "Failed to promote user to admin",
+        variant: "destructive",
       });
     }
   };
 
-  if (authLoading || roleLoading || loading) {
+  if (roleLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-primary">
         <div className="text-center">
@@ -152,6 +109,10 @@ const Admin = () => {
         </div>
       </div>
     );
+  }
+
+  if (!isAdmin) {
+    return null;
   }
 
   return (
@@ -167,129 +128,170 @@ const Admin = () => {
             Back to App
           </Button>
           <div className="flex items-center gap-2">
-            <Shield className="w-6 h-6 text-primary" />
+            <Crown className="w-6 h-6 text-primary" />
             <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{users.length}</div>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <Tabs defaultValue="users" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="users" className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Users ({users.length})
+              </TabsTrigger>
+              <TabsTrigger value="subscribers" className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Subscribers ({subscribers.length})
+              </TabsTrigger>
+              <TabsTrigger value="sessions" className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Chat Sessions ({sessions.length})
+              </TabsTrigger>
+            </TabsList>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Subscribers</CardTitle>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {subscribers.filter(s => s.subscribed).length}
-              </div>
-            </CardContent>
-          </Card>
+            <TabsContent value="users">
+              <Card>
+                <CardHeader>
+                  <CardTitle>User Management</CardTitle>
+                  <CardDescription>
+                    Manage user roles and permissions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.map((userRole) => (
+                        <TableRow key={userRole.id}>
+                          <TableCell className="font-mono text-sm">
+                            {userRole.user_id.slice(0, 8)}...
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={userRole.role === 'admin' ? 'default' : 'secondary'}>
+                              {userRole.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {new Date(userRole.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {userRole.role !== 'admin' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => makeAdmin(userRole.user_id)}
+                              >
+                                <UserCheck className="w-4 h-4 mr-2" />
+                                Make Admin
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Messages Today</CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {dailyUsage
-                  .filter(d => d.date === new Date().toISOString().split('T')[0])
-                  .reduce((sum, d) => sum + d.message_count, 0)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <TabsContent value="subscribers">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Subscription Management</CardTitle>
+                  <CardDescription>
+                    View and manage user subscriptions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Tier</TableHead>
+                        <TableHead>End Date</TableHead>
+                        <TableHead>Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {subscribers.map((subscriber) => (
+                        <TableRow key={subscriber.id}>
+                          <TableCell>{subscriber.email}</TableCell>
+                          <TableCell>
+                            <Badge variant={subscriber.subscribed ? 'default' : 'secondary'}>
+                              {subscriber.subscribed ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{subscriber.subscription_tier || 'None'}</TableCell>
+                          <TableCell>
+                            {subscriber.subscription_end 
+                              ? new Date(subscriber.subscription_end).toLocaleDateString()
+                              : 'N/A'
+                            }
+                          </TableCell>
+                          <TableCell>
+                            {new Date(subscriber.created_at).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>User Management</CardTitle>
-              <CardDescription>
-                Manage user roles and permissions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User ID</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-mono text-xs">
-                        {user.id.slice(-8)}...
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>
-                          {user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={user.role}
-                          onValueChange={(value) => updateUserRole(user.id, value as 'admin' | 'user')}
-                        >
-                          <SelectTrigger className="w-24">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Usage</CardTitle>
-              <CardDescription>
-                Daily message usage statistics
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Messages</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dailyUsage.slice(0, 10).map((usage) => (
-                    <TableRow key={usage.id}>
-                      <TableCell>{usage.date}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {usage.user_id?.slice(-8)}...
-                      </TableCell>
-                      <TableCell>{usage.message_count}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
+            <TabsContent value="sessions">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Chat Sessions</CardTitle>
+                  <CardDescription>
+                    Recent chat sessions in the app
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Updated</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sessions.map((session) => (
+                        <TableRow key={session.id}>
+                          <TableCell>{session.title}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {session.user_id ? `${session.user_id.slice(0, 8)}...` : 'Anonymous'}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(session.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(session.updated_at).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </div>
   );
