@@ -1,12 +1,14 @@
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { LogIn, LogOut, User } from "lucide-react";
+import { LogIn, LogOut, User, Shield } from "lucide-react";
 
 const Index = () => {
   const { loading, user, signOut } = useAuth();
+  const { isAdmin } = useRole();
   const navigate = useNavigate();
 
   console.log("Auth state:", { loading, user: !!user, email: user?.email });
@@ -33,6 +35,12 @@ const Index = () => {
                 <User className="w-4 h-4" />
                 {user.email}
               </div>
+              {isAdmin && (
+                <Button variant="outline" onClick={() => navigate("/admin")} size="sm">
+                  <Shield className="w-4 h-4 mr-2" />
+                  Admin
+                </Button>
+              )}
               <Button variant="outline" onClick={signOut} size="sm">
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
