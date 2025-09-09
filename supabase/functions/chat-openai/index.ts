@@ -72,8 +72,7 @@ serve(async (req) => {
       // Get current daily usage (only for authenticated users now)
       const { data: currentUsage, error: usageError } = await serviceSupabase
         .rpc('get_daily_usage', { 
-          p_user_id: userId, 
-          p_email: null // Removed email tracking for security
+          p_user_id: userId
         });
 
       if (usageError) {
@@ -99,8 +98,7 @@ serve(async (req) => {
       // Increment usage count for non-subscribers
       const { data: newUsage, error: incrementError } = await serviceSupabase
         .rpc('increment_daily_usage', { 
-          p_user_id: userId, 
-          p_email: null // Removed email tracking for security
+          p_user_id: userId
         });
 
       if (incrementError) {

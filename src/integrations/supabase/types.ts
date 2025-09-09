@@ -75,7 +75,6 @@ export type Database = {
         Row: {
           created_at: string
           date: string
-          email: string | null
           id: string
           message_count: number
           updated_at: string
@@ -84,7 +83,6 @@ export type Database = {
         Insert: {
           created_at?: string
           date?: string
-          email?: string | null
           id?: string
           message_count?: number
           updated_at?: string
@@ -93,7 +91,6 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
-          email?: string | null
           id?: string
           message_count?: number
           updated_at?: string
@@ -303,7 +300,7 @@ export type Database = {
         Returns: string
       }
       get_daily_usage: {
-        Args: { p_email?: string; p_user_id?: string }
+        Args: { p_email?: string; p_user_id?: string } | { p_user_id: string }
         Returns: number
       }
       get_prev_hash: {
@@ -311,7 +308,7 @@ export type Database = {
         Returns: string
       }
       increment_daily_usage: {
-        Args: { p_email?: string; p_user_id?: string }
+        Args: { p_email?: string; p_user_id?: string } | { p_user_id: string }
         Returns: number
       }
     }

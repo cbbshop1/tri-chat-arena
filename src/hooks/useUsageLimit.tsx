@@ -27,8 +27,7 @@ export const useUsageLimit = () => {
 
     try {
       const { data, error } = await supabase.rpc('get_daily_usage', {
-        p_user_id: user.id,
-        p_email: null // Removed email tracking for security
+        p_user_id: user.id
       });
 
       if (error) throw error;
@@ -49,8 +48,7 @@ export const useUsageLimit = () => {
 
     try {
       const { data, error } = await supabase.rpc('increment_daily_usage', {
-        p_user_id: user.id,
-        p_email: null // Removed email tracking for security
+        p_user_id: user.id
       });
 
       if (error) throw error;
