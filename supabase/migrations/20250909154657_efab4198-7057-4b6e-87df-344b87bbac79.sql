@@ -1,0 +1,62 @@
+-- Remove email column from daily_usage table to eliminate email harvesting risk
+ALTER TABLE public.daily_usage DROP COLUMN IF EXISTS email;
+
+-- Update the daily usage functions to remove email parameter completely
+CREATE OR REPLACE FUNCTION public.get_daily_usage(p_user_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+STABLE
+SET search_path = public
+AS $function$
+DECLARE
+  current_count INTEGER := 0;
+BEGIN
+  -- Only allow access for authenticated users with matching user_id
+  IF p_user_id IS NULL OR auth.uid() IS NULL OR auth.uid() != p_user_id THEN
+    RETURN 0;
+  END IF;
+
+  SELECT COALESCE(message_count, 0) INTO current_count
+  FROM public.daily_usage
+  WHERE user_id = p_user_id
+    AND date = CURRENT_DATE;
+  
+  RETURN current_count;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.increment_daily_usage(p_user_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SET search_path = public
+AS $function$
+DECLARE
+  current_count INTEGER;
+BEGIN
+  -- Only allow access for authenticated users with matching user_id
+  IF p_user_id IS NULL OR auth.uid() IS NULL OR auth.uid() != p_user_id THEN
+    RETURN 0;
+  END IF;
+
+  INSERT INTO public.daily_usage (user_id, date, message_count)
+  VALUES (p_user_id, CURRENT_DATE, 1)
+  ON CONFLICT (user_id, date)
+  DO UPDATE SET 
+    message_count = daily_usage.message_count + 1,
+    updated_at = now()
+  RETURNING message_count INTO current_count;
+  
+  RETURN current_count;
+END;
+$function$;
+
+-- Add proper RLS policies to ledger_verification table
+ALTER TABLE public.ledger_verification ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Ledger verification is publicly readable" 
+ON public.ledger_verification 
+FOR SELECT 
+USING (true);
+
+-- Ensure subscribers table has proper RLS (should already exist but let's verify)
+-- The existing policies should already prevent anonymous access
