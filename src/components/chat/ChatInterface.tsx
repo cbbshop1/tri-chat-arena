@@ -68,6 +68,8 @@ export default function ChatInterface() {
   const [chatFiles, setChatFiles] = useState<ChatFile[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [attachedKnowledge, setAttachedKnowledge] = useState<KnowledgeItem[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -405,8 +407,18 @@ export default function ChatInterface() {
       loadChatFiles();
     } else {
       setChatFiles([]);
+      setAttachedFiles([]);
     }
   }, [currentSessionId]);
+
+  // Auto-attach all knowledge and files when they change
+  useEffect(() => {
+    setAttachedKnowledge(knowledgeBase);
+  }, [knowledgeBase]);
+
+  useEffect(() => {
+    setAttachedFiles(chatFiles);
+  }, [chatFiles]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -425,18 +437,18 @@ export default function ChatInterface() {
   const getContextForAI = () => {
     let context = '';
     
-    // Add knowledge base context
-    if (knowledgeBase.length > 0) {
+    // Add attached knowledge base context
+    if (attachedKnowledge.length > 0) {
       context += '\n--- Knowledge Base ---\n';
-      knowledgeBase.forEach(item => {
+      attachedKnowledge.forEach(item => {
         context += `${item.title}:\n${item.content}\n\n`;
       });
     }
 
-    // Add file context
-    if (chatFiles.length > 0) {
+    // Add attached file context
+    if (attachedFiles.length > 0) {
       context += '\n--- Uploaded Files ---\n';
-      chatFiles.forEach(file => {
+      attachedFiles.forEach(file => {
         if (file.content_preview) {
           context += `File: ${file.filename}\nContent: ${file.content_preview}\n\n`;
         } else {
@@ -446,6 +458,22 @@ export default function ChatInterface() {
     }
 
     return context;
+  };
+
+  const removeAttachedKnowledge = (id: string) => {
+    setAttachedKnowledge(prev => prev.filter(item => item.id !== id));
+  };
+
+  const removeAttachedFile = (id: string) => {
+    setAttachedFiles(prev => prev.filter(file => file.id !== id));
+  };
+
+  const addBackKnowledge = (item: KnowledgeItem) => {
+    setAttachedKnowledge(prev => [...prev, item]);
+  };
+
+  const addBackFile = (file: ChatFile) => {
+    setAttachedFiles(prev => [...prev, file]);
   };
 
   const exportChatSession = async () => {
@@ -827,22 +855,72 @@ export default function ChatInterface() {
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto">
             {/* Context Info */}
-            {(knowledgeBase.length > 0 || chatFiles.length > 0) && (
+            {(attachedKnowledge.length > 0 || attachedFiles.length > 0) && (
               <div className="mb-3 p-2 bg-card border border-border rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Available Context:</div>
+                <div className="text-xs text-muted-foreground mb-2">Attached to this message:</div>
                 <div className="flex flex-wrap gap-1">
-                  {knowledgeBase.length > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      📚 {knowledgeBase.length} knowledge item{knowledgeBase.length !== 1 ? 's' : ''}
+                  {attachedKnowledge.map((item) => (
+                    <Badge key={item.id} variant="outline" className="text-xs group">
+                      📚 {item.title}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                        onClick={() => removeAttachedKnowledge(item.id)}
+                      >
+                        <X className="w-2 h-2" />
+                      </Button>
                     </Badge>
-                  )}
-                  {chatFiles.map((file) => (
-                    <Badge key={file.id} variant="outline" className="text-xs">
+                  ))}
+                  {attachedFiles.map((file) => (
+                    <Badge key={file.id} variant="outline" className="text-xs group">
                       <File className="w-3 h-3 mr-1" />
                       {file.filename}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                        onClick={() => removeAttachedFile(file.id)}
+                      >
+                        <X className="w-2 h-2" />
+                      </Button>
                     </Badge>
                   ))}
                 </div>
+                
+                {/* Show detached items that can be re-attached */}
+                {(knowledgeBase.length > attachedKnowledge.length || chatFiles.length > attachedFiles.length) && (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <div className="text-xs text-muted-foreground mb-1">Available to attach:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {knowledgeBase
+                        .filter(item => !attachedKnowledge.find(attached => attached.id === item.id))
+                        .map((item) => (
+                          <Badge 
+                            key={item.id} 
+                            variant="secondary" 
+                            className="text-xs cursor-pointer hover:bg-primary/20"
+                            onClick={() => addBackKnowledge(item)}
+                          >
+                            📚 {item.title}
+                          </Badge>
+                        ))}
+                      {chatFiles
+                        .filter(file => !attachedFiles.find(attached => attached.id === file.id))
+                        .map((file) => (
+                          <Badge 
+                            key={file.id} 
+                            variant="secondary" 
+                            className="text-xs cursor-pointer hover:bg-primary/20"
+                            onClick={() => addBackFile(file)}
+                          >
+                            <File className="w-3 h-3 mr-1" />
+                            {file.filename}
+                          </Badge>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
