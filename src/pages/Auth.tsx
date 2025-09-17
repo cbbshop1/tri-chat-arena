@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
+import { validateEmail, validatePassword, getPasswordStrength, authRateLimit } from "@/lib/validation";
+import { PasswordStrengthIndicator } from "@/components/ui/password-strength";
+import { AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailErrors, setEmailErrors] = useState<string[]>([]);
+  const [emailWarnings, setEmailWarnings] = useState<string[]>([]);
+  const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [showPasswordStrength, setShowPasswordStrength] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Real-time email validation
+  const emailValidation = useMemo(() => {
+    if (!email) return { isValid: true, errors: [], warnings: [] };
+    return validateEmail(email);
+  }, [email]);
+
+  // Real-time password validation and strength
+  const passwordValidation = useMemo(() => {
+    if (!password) return { isValid: true, errors: [], warnings: [] };
+    return validatePassword(password);
+  }, [password]);
+
+  const passwordStrength = useMemo(() => {
+    if (!password) return { score: 0, feedback: '', requirements: { length: false, uppercase: false, lowercase: false, number: false, special: false, common: true } };
+    return getPasswordStrength(password);
+  }, [password]);
+
+  // Update error states when validation changes
+  useEffect(() => {
+    setEmailErrors(emailValidation.errors);
+    setEmailWarnings(emailValidation.warnings);
+  }, [emailValidation]);
+
+  useEffect(() => {
+    setPasswordErrors(passwordValidation.errors);
+    setShowPasswordStrength(password.length > 0);
+  }, [passwordValidation, password]);
 
   useEffect(() => {
     // Check if user is already authenticated
@@ -62,6 +97,30 @@ const Auth = () => {
     setLoading(true);
     setError("");
 
+    // Rate limiting check
+    if (!authRateLimit.isAllowed(email)) {
+      const remainingTime = Math.ceil(authRateLimit.getRemainingTime(email) / 60000);
+      setError(`Too many attempts. Please try again in ${remainingTime} minutes.`);
+      setLoading(false);
+      return;
+    }
+
+    // Validate email and password
+    const emailVal = validateEmail(email);
+    const passwordVal = validatePassword(password);
+
+    if (!emailVal.isValid) {
+      setError(emailVal.errors[0]);
+      setLoading(false);
+      return;
+    }
+
+    if (!passwordVal.isValid) {
+      setError(passwordVal.errors[0]);
+      setLoading(false);
+      return;
+    }
+
     // Check if email already exists
     const emailExists = await checkEmailExists(email);
     if (emailExists) {
@@ -73,7 +132,7 @@ const Auth = () => {
     const redirectUrl = `${window.location.origin}/`;
 
     const { error } = await supabase.auth.signUp({
-      email,
+      email: email.toLowerCase().trim(),
       password,
       options: {
         emailRedirectTo: redirectUrl
@@ -100,8 +159,23 @@ const Auth = () => {
     setLoading(true);
     setError("");
 
+    // Rate limiting check
+    if (!authRateLimit.isAllowed(email)) {
+      const remainingTime = Math.ceil(authRateLimit.getRemainingTime(email) / 60000);
+      setError(`Too many attempts. Please try again in ${remainingTime} minutes.`);
+      setLoading(false);
+      return;
+    }
+
+    // Basic email validation for sign in
+    if (!email.includes('@')) {
+      setError("Please enter a valid email address.");
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.toLowerCase().trim(),
       password,
     });
 
@@ -142,7 +216,28 @@ const Auth = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder="Enter your email"
+                    className={emailErrors.length > 0 ? "border-destructive" : ""}
                   />
+                  {emailErrors.length > 0 && (
+                    <div className="space-y-1">
+                      {emailErrors.map((error, index) => (
+                        <div key={index} className="flex items-center space-x-1 text-sm text-destructive">
+                          <XCircle className="h-3 w-3" />
+                          <span>{error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {emailWarnings.length > 0 && (
+                    <div className="space-y-1">
+                      {emailWarnings.map((warning, index) => (
+                        <div key={index} className="flex items-center space-x-1 text-sm text-yellow-600">
+                          <AlertTriangle className="h-3 w-3" />
+                          <span>{warning}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signin-password">Password</Label>
@@ -177,7 +272,34 @@ const Auth = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     placeholder="Enter your email"
+                    className={emailErrors.length > 0 ? "border-destructive" : emailValidation.isValid && email ? "border-green-500" : ""}
                   />
+                  {emailErrors.length > 0 && (
+                    <div className="space-y-1">
+                      {emailErrors.map((error, index) => (
+                        <div key={index} className="flex items-center space-x-1 text-sm text-destructive">
+                          <XCircle className="h-3 w-3" />
+                          <span>{error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {emailWarnings.length > 0 && (
+                    <div className="space-y-1">
+                      {emailWarnings.map((warning, index) => (
+                        <div key={index} className="flex items-center space-x-1 text-sm text-yellow-600">
+                          <AlertTriangle className="h-3 w-3" />
+                          <span>{warning}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {emailValidation.isValid && email && emailErrors.length === 0 && (
+                    <div className="flex items-center space-x-1 text-sm text-green-600">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Valid email address</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
@@ -188,15 +310,35 @@ const Auth = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     placeholder="Create a password"
-                    minLength={6}
+                    className={passwordErrors.length > 0 ? "border-destructive" : passwordValidation.isValid && password ? "border-green-500" : ""}
                   />
+                  {passwordErrors.length > 0 && (
+                    <div className="space-y-1">
+                      {passwordErrors.map((error, index) => (
+                        <div key={index} className="flex items-center space-x-1 text-sm text-destructive">
+                          <XCircle className="h-3 w-3" />
+                          <span>{error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {showPasswordStrength && (
+                    <PasswordStrengthIndicator 
+                      strength={passwordStrength}
+                      className="mt-2"
+                    />
+                  )}
                 </div>
                 {error && (
                   <Alert variant="destructive">
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={loading || !emailValidation.isValid || !passwordValidation.isValid}
+                >
                   {loading ? "Creating account..." : "Sign Up"}
                 </Button>
               </form>
