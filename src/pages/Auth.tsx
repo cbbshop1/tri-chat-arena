@@ -37,10 +37,38 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      // Try to sign in with a dummy password to check if email exists
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: "dummy-password-to-check-email"
+      });
+      
+      // If we get "Invalid login credentials", the email exists but password is wrong
+      // If we get "Invalid email or password", the email might not exist
+      if (error?.message.includes("Invalid login credentials")) {
+        return true;
+      }
+      
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Check if email already exists
+    const emailExists = await checkEmailExists(email);
+    if (emailExists) {
+      setError("This email is already registered. Please use the Sign In tab instead.");
+      setLoading(false);
+      return;
+    }
 
     const redirectUrl = `${window.location.origin}/`;
 
@@ -53,8 +81,8 @@ const Auth = () => {
     });
 
     if (error) {
-      if (error.message.includes("already registered")) {
-        setError("This email is already registered. Please try signing in instead.");
+      if (error.message.includes("already registered") || error.message.includes("User already registered")) {
+        setError("This email is already registered. Please use the Sign In tab instead.");
       } else {
         setError(error.message);
       }
