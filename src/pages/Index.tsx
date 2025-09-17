@@ -5,6 +5,7 @@ import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { LogIn, LogOut, User, Crown } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const Index = () => {
   const { loading, user, signOut } = useAuth();
@@ -28,7 +29,10 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-primary">
       <div className="container mx-auto py-4">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-foreground">Tri-Chat Basecamp</h1>
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="Tri-Chat Basecamp Logo" className="w-8 h-8" />
+            <h1 className="text-2xl font-bold text-foreground">Tri-Chat Basecamp</h1>
+          </div>
           {user ? (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
