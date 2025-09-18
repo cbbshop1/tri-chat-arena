@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useUsageLimit } from '@/hooks/useUsageLimit';
 import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download } from 'lucide-react';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -631,130 +632,136 @@ export default function ChatInterface() {
 
   return (
     <div className="flex h-screen bg-gradient-primary">
-      {/* Sidebar */}
-      <div className="w-80 border-r border-border bg-card/50 backdrop-blur-sm flex flex-col">
-        <div className="p-4 border-b border-border">
-          <Button onClick={createNewSession} className="w-full" variant="outline">
-            <Plus className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
-        </div>
-        
-        <Tabs defaultValue="chats" className="flex-1 flex flex-col">
-          <TabsList className="mx-2 mt-2">
-            <TabsTrigger value="chats" className="flex-1">
-              <MessageSquare className="w-4 h-4 mr-1" />
-              Chats
-            </TabsTrigger>
-            <TabsTrigger value="knowledge" className="flex-1">
-              <Bot className="w-4 h-4 mr-1" />
-              Knowledge
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="chats" className="flex-1 mt-0">
-            <ScrollArea className="h-full">
-              <div className="p-2">
-                {sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={cn(
-                      "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
-                      currentSessionId === session.id 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'hover:bg-card/80'
-                    )}
-                    onClick={() => setCurrentSessionId(session.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center min-w-0 flex-1">
-                        <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                        <span className="truncate text-sm">{session.title}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSession(session.id);
-                        }}
+      <ResizablePanelGroup direction="horizontal" className="min-h-0">
+        {/* Sidebar */}
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
+          <div className="h-full border-r border-border bg-card/50 backdrop-blur-sm flex flex-col">
+            <div className="p-4 border-b border-border">
+              <Button onClick={createNewSession} className="w-full" variant="outline">
+                <Plus className="w-4 h-4 mr-2" />
+                New Chat
+              </Button>
+            </div>
+            
+            <Tabs defaultValue="chats" className="flex-1 flex flex-col">
+              <TabsList className="mx-2 mt-2">
+                <TabsTrigger value="chats" className="flex-1">
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  Chats
+                </TabsTrigger>
+                <TabsTrigger value="knowledge" className="flex-1">
+                  <Bot className="w-4 h-4 mr-1" />
+                  Knowledge
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="chats" className="flex-1 mt-0">
+                <ScrollArea className="h-full">
+                  <div className="p-2">
+                    {sessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className={cn(
+                          "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
+                          currentSessionId === session.id 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'hover:bg-card/80'
+                        )}
+                        onClick={() => setCurrentSessionId(session.id)}
                       >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center min-w-0 flex-1">
+                            <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
+                            <span className="truncate text-sm">{session.title}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteSession(session.id);
+                            }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                </ScrollArea>
+              </TabsContent>
+              
+              <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden">
+                <div className="p-2 h-full">
+                  <KnowledgeManager 
+                    knowledgeBase={knowledgeBase} 
+                    onRefresh={loadKnowledgeBase}
+                  />
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        {/* Main Chat Area */}
+        <ResizablePanel defaultSize={75} minSize={60}>
+          <div className="h-full flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border bg-card/50 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <Bot className="w-6 h-6 text-primary" />
+                <h1 className="text-xl font-bold bg-gradient-glow bg-clip-text text-transparent">
+                  Multi-AI Chat
+                </h1>
+              </div>
+              
+              {/* AI Selector & Export */}
+              <div className="flex gap-2">
+                {currentSessionId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportChatSession}
+                    className="gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export Chat
+                  </Button>
+                )}
+                <Button
+                  variant={selectedAI === "all" ? "default" : "secondary"}
+                  size="sm"
+                  onClick={() => setSelectedAI("all")}
+                  className={cn(
+                    "gap-2",
+                    selectedAI === "all" && "bg-gradient-glow"
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  All AIs
+                </Button>
+                {Object.entries(AI_CONFIGS)
+                  .filter(([key]) => key !== 'all')
+                  .map(([key, config]) => (
+                  <Button
+                    key={key}
+                    variant={selectedAI === key ? "default" : "secondary"}
+                    size="sm"
+                    onClick={() => setSelectedAI(key as AIModel)}
+                    className={cn(
+                      "gap-2",
+                      selectedAI === key && `bg-${config.color} hover:bg-${config.color}/90`
+                    )}
+                  >
+                    <span>{config.icon}</span>
+                    {config.name}
+                  </Button>
                 ))}
               </div>
-            </ScrollArea>
-          </TabsContent>
-          
-          <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden">
-            <div className="p-2 h-full">
-              <KnowledgeManager 
-                knowledgeBase={knowledgeBase} 
-                onRefresh={loadKnowledgeBase}
-              />
             </div>
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-card/50 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <Bot className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold bg-gradient-glow bg-clip-text text-transparent">
-              Multi-AI Chat
-            </h1>
-          </div>
-          
-          {/* AI Selector & Export */}
-          <div className="flex gap-2">
-            {currentSessionId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportChatSession}
-                className="gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Export Chat
-              </Button>
-            )}
-            <Button
-              variant={selectedAI === "all" ? "default" : "secondary"}
-              size="sm"
-              onClick={() => setSelectedAI("all")}
-              className={cn(
-                "gap-2",
-                selectedAI === "all" && "bg-gradient-glow"
-              )}
-            >
-              <Users className="w-4 h-4" />
-              All AIs
-            </Button>
-            {Object.entries(AI_CONFIGS)
-              .filter(([key]) => key !== 'all')
-              .map(([key, config]) => (
-              <Button
-                key={key}
-                variant={selectedAI === key ? "default" : "secondary"}
-                size="sm"
-                onClick={() => setSelectedAI(key as AIModel)}
-                className={cn(
-                  "gap-2",
-                  selectedAI === key && `bg-${config.color} hover:bg-${config.color}/90`
-                )}
-              >
-                <span>{config.icon}</span>
-                {config.name}
-              </Button>
-            ))}
-          </div>
-        </div>
 
         {/* Messages */}
         <ScrollArea className="flex-1 p-4">
@@ -983,7 +990,9 @@ export default function ChatInterface() {
             </div>
           </div>
         </div>
-      </div>
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }
