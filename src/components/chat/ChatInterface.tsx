@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
@@ -73,6 +73,7 @@ export default function ChatInterface() {
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const { subscribed } = useSubscription();
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
@@ -96,6 +97,17 @@ export default function ChatInterface() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = '44px'; // Reset to min height
+      const scrollHeight = textarea.scrollHeight;
+      const maxHeight = 120; // 4 lines approximate
+      textarea.style.height = Math.min(scrollHeight, maxHeight) + 'px';
+    }
+  }, [input]);
 
   const loadSessions = async () => {
     try {
@@ -951,13 +963,20 @@ export default function ChatInterface() {
                 <Paperclip className="w-4 h-4" />
               </Button>
               
-              <Input
+              <Textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
                 placeholder={currentSessionId ? `Message ${selectedAI === "all" ? "all AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}...` : "Create or select a session to start chatting"}
                 disabled={loading || !currentSessionId}
-                className="flex-1 bg-input border-border focus:ring-ring"
+                className="flex-1 bg-input border-border focus:ring-ring min-h-[44px] max-h-[120px] resize-none overflow-y-auto"
+                rows={1}
               />
               <Button 
                 onClick={handleSend} 
