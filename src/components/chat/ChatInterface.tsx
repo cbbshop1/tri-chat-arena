@@ -282,6 +282,11 @@ export default function ChatInterface() {
     // Prepend context to the message if available
     const messageWithContext = context ? `${context}\n\nUser Message: ${message}` : message;
     
+    // For DeepSeek, use streaming
+    if (ai === 'deepseek') {
+      return await streamDeepSeek(messageWithContext, conversationHistory);
+    }
+    
     const { data, error } = await supabase.functions.invoke(functionName, {
       body: { 
         message: messageWithContext,
@@ -292,6 +297,85 @@ export default function ChatInterface() {
 
     if (error) throw error;
     return data.reply;
+  };
+
+  const streamDeepSeek = async (message: string, conversationHistory: any[]): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch(
+      `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/chat-deepseek`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          message,
+          conversation_history: conversationHistory,
+          sessionId: currentSessionId
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`DeepSeek streaming error: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    if (!reader) throw new Error('No reader available');
+
+    // Create a placeholder message that we'll update
+    const tempMessageId = `temp-${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: tempMessageId,
+      content: '',
+      role: 'assistant',
+      ai_model: 'deepseek',
+      created_at: new Date().toISOString()
+    }]);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullResponse += content;
+                // Update the message in real-time
+                setMessages(prev => prev.map(msg => 
+                  msg.id === tempMessageId 
+                    ? { ...msg, content: fullResponse }
+                    : msg
+                ));
+              }
+            } catch (e) {
+              // Skip malformed JSON
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Remove temp message, the real one will be saved
+    setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+
+    return fullResponse;
   };
 
   const forwardMessage = async (content: string, fromAI: SpecificAI, toAI: SpecificAI) => {
