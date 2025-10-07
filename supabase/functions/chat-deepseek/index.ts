@@ -48,63 +48,60 @@ serve(async (req) => {
         userEmail = userData.user.email;
         logStep("Authenticated user found", { userId, email: userEmail });
 
-        // Check subscription status
-        const { data: subscriptionData } = await supabaseClient
-          .from('subscribers')
-          .select('subscribed')
-          .eq('user_id', userId)
-          .maybeSingle();
+        // Use service role client for usage operations
+        const serviceSupabase = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+          { auth: { persistSession: false } }
+        );
+
+        // Parallelize subscription check and usage check
+        const [subscriptionResult, usageResult] = await Promise.all([
+          supabaseClient
+            .from('subscribers')
+            .select('subscribed')
+            .eq('user_id', userId)
+            .maybeSingle(),
+          serviceSupabase.rpc('get_daily_usage', { p_user_id: userId })
+        ]);
         
-        isSubscribed = subscriptionData?.subscribed || false;
+        isSubscribed = subscriptionResult.data?.subscribed || false;
         logStep("Subscription status", { isSubscribed });
-      }
-    }
 
-    // For non-subscribers, check usage limits
-    if (!isSubscribed) {
-      // Use service role client for usage operations to bypass RLS securely
-      const serviceSupabase = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-        { auth: { persistSession: false } }
-      );
-      
-      // Get current daily usage (only for authenticated users now)
-      const { data: currentUsage, error: usageError } = await serviceSupabase
-        .rpc('get_daily_usage', { 
-          p_user_id: userId
-        });
+        // For non-subscribers, check usage limits
+        if (!isSubscribed) {
+          if (usageResult.error) {
+            logStep("Error checking usage", { error: usageResult.error });
+          }
 
-      if (usageError) {
-        logStep("Error checking usage", { error: usageError });
-      }
+          const usage = usageResult.data || 0;
+          logStep("Current usage", { usage, limit: 20 });
 
-      const usage = currentUsage || 0;
-      logStep("Current usage", { usage, limit: 20 });
+          if (usage >= 20) {
+            logStep("Usage limit exceeded");
+            return new Response(JSON.stringify({ 
+              error: 'Daily message limit reached. Please subscribe for unlimited access.',
+              limitReached: true,
+              usage,
+              limit: 20
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 429,
+            });
+          }
 
-      if (usage >= 20) {
-        logStep("Usage limit exceeded");
-        return new Response(JSON.stringify({ 
-          error: 'Daily message limit reached. Please subscribe for unlimited access.',
-          limitReached: true,
-          usage,
-          limit: 20
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 429,
-        });
-      }
+          // Increment usage count for non-subscribers
+          const { data: newUsage, error: incrementError } = await serviceSupabase
+            .rpc('increment_daily_usage', { 
+              p_user_id: userId
+            });
 
-      // Increment usage count for non-subscribers
-      const { data: newUsage, error: incrementError } = await serviceSupabase
-        .rpc('increment_daily_usage', { 
-          p_user_id: userId
-        });
-
-      if (incrementError) {
-        logStep("Error incrementing usage", { error: incrementError });
-      } else {
-        logStep("Usage incremented", { newUsage });
+          if (incrementError) {
+            logStep("Error incrementing usage", { error: incrementError });
+          } else {
+            logStep("Usage incremented", { newUsage });
+          }
+        }
       }
     }
 
