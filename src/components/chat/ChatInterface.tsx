@@ -222,11 +222,11 @@ export default function ChatInterface() {
     }
   };
 
-  const saveMessage = async (content: string, role: 'user' | 'assistant', aiModel?: SpecificAI, targetAI?: SpecificAI | 'all') => {
-    if (!currentSessionId) return;
+  const saveMessage = async (content: string, role: 'user' | 'assistant', aiModel?: SpecificAI, targetAI?: SpecificAI | 'all'): Promise<Message | null> => {
+    if (!currentSessionId) return null;
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('messages')
         .insert([{
           session_id: currentSessionId,
@@ -234,11 +234,15 @@ export default function ChatInterface() {
           role,
           ai_model: aiModel,
           target_ai: targetAI // Track which AI this message was intended for
-        }]);
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
+      return data as Message;
     } catch (error) {
       console.error('Error saving message:', error);
+      return null;
     }
   };
 
@@ -274,7 +278,7 @@ export default function ChatInterface() {
       }));
   };
 
-  const callAI = async (ai: SpecificAI, message: string): Promise<string> => {
+  const callAI = async (ai: SpecificAI, message: string): Promise<string | { reply: string; tempId: string }> => {
     const conversationHistory = getConversationHistory(ai);
     const context = getContextForAI();
     const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
@@ -284,7 +288,8 @@ export default function ChatInterface() {
     
     // For DeepSeek, use streaming
     if (ai === 'deepseek') {
-      return await streamDeepSeek(messageWithContext, conversationHistory);
+      const result = await streamDeepSeek(messageWithContext, conversationHistory);
+      return { reply: result.response, tempId: result.tempId };
     }
     
     const { data, error } = await supabase.functions.invoke(functionName, {
@@ -299,7 +304,7 @@ export default function ChatInterface() {
     return data.reply;
   };
 
-  const streamDeepSeek = async (message: string, conversationHistory: any[]): Promise<string> => {
+  const streamDeepSeek = async (message: string, conversationHistory: any[]): Promise<{ response: string; tempId: string }> => {
     const { data: { session } } = await supabase.auth.getSession();
     const response = await fetch(
       `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/chat-deepseek`,
@@ -372,10 +377,8 @@ export default function ChatInterface() {
       reader.releaseLock();
     }
 
-    // Remove temp message, the real one will be saved
-    setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
-
-    return fullResponse;
+    // Return the full response and the temp ID so we can replace it with the real saved message
+    return { response: fullResponse, tempId: tempMessageId };
   };
 
   const forwardMessage = async (content: string, fromAI: SpecificAI, toAI: SpecificAI) => {
@@ -388,7 +391,8 @@ export default function ChatInterface() {
       
       // Call the target AI
       const reply = await callAI(toAI, forwardPrompt);
-      await saveMessage(reply, 'assistant', toAI);
+      const replyContent = typeof reply === 'string' ? reply : reply.reply;
+      await saveMessage(replyContent, 'assistant', toAI);
       
       // Reload messages to show the forwarded response
       await loadMessages(currentSessionId);
@@ -690,8 +694,19 @@ export default function ChatInterface() {
         const aiPromises = (["chatgpt", "claude", "deepseek"] as SpecificAI[]).map(async (ai) => {
           try {
             const reply = await callAI(ai, message);
-            await saveMessage(reply, 'assistant', ai);
-            return { ai, reply, success: true };
+            const replyContent = typeof reply === 'string' ? reply : reply.reply;
+            const tempId = typeof reply === 'object' ? reply.tempId : null;
+            
+            const savedMessage = await saveMessage(replyContent, 'assistant', ai);
+            
+            // If streaming (has tempId), replace temp message
+            if (tempId && savedMessage) {
+              setMessages(prev => prev.map(msg => 
+                msg.id === tempId ? savedMessage : msg
+              ));
+            }
+            
+            return { ai, reply: replyContent, success: true };
           } catch (error) {
             console.error(`Error with ${ai}:`, error);
             const errorMsg = `Error: ${error.message}`;
@@ -701,19 +716,32 @@ export default function ChatInterface() {
         });
 
         await Promise.all(aiPromises);
+        // Only reload for non-streaming responses
+        await loadMessages(currentSessionId);
       } else {
         // Call specific AI
         try {
           const reply = await callAI(selectedAI as SpecificAI, message);
-          await saveMessage(reply, 'assistant', selectedAI as SpecificAI);
+          const replyContent = typeof reply === 'string' ? reply : reply.reply;
+          const tempId = typeof reply === 'object' ? reply.tempId : null;
+          
+          const savedMessage = await saveMessage(replyContent, 'assistant', selectedAI as SpecificAI);
+          
+          // If streaming (has tempId), replace temp message with saved one
+          if (tempId && savedMessage) {
+            setMessages(prev => prev.map(msg => 
+              msg.id === tempId ? savedMessage : msg
+            ));
+          } else {
+            // For non-streaming, reload messages
+            await loadMessages(currentSessionId);
+          }
         } catch (error) {
           console.error(`Error with ${selectedAI}:`, error);
           await saveMessage(`Error: ${error.message}`, 'assistant', selectedAI as SpecificAI);
+          await loadMessages(currentSessionId);
         }
       }
-
-      // Reload messages to show responses
-      await loadMessages(currentSessionId);
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
