@@ -76,6 +76,14 @@ serve(async (req) => {
     }
     console.log('[SAVE-TO-LEDGER] All validations passed');
 
+    // Sanitize body_json to fix invalid Unicode characters
+    const sanitizedBodyJson = JSON.parse(
+      JSON.stringify(body_json)
+        .replace(/\\udccd/g, '📍')  // Replace invalid surrogate with actual emoji
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')  // Remove control characters
+    );
+    console.log('[SAVE-TO-LEDGER] Sanitized body_json');
+
     // Create Supabase client with service role key
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -94,7 +102,7 @@ serve(async (req) => {
       .insert({ 
         agent_id, 
         entry_type, 
-        body_json 
+        body_json: sanitizedBodyJson 
       })
       .select()
       .single();
