@@ -674,8 +674,35 @@ export default function ChatInterface() {
   };
 
   const saveToLedger = async (messageId: string, content: string) => {
+    console.log('[LEDGER] Function called with:', { messageId, content: content?.substring(0, 50) });
+    
+    if (!messageId) {
+      console.error('[LEDGER] No messageId provided!');
+      toast({
+        title: "Error",
+        description: "No message ID found",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!content) {
+      console.error('[LEDGER] No content provided!');
+      toast({
+        title: "Error",
+        description: "No content to save",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       setLoading(true);
+      
+      console.log('[LEDGER] Supabase client status:', { 
+        clientExists: !!supabase, 
+        functionsExists: !!supabase?.functions 
+      });
       
       console.log('[LEDGER] Starting save to ledger...', { messageId, contentLength: content.length });
       
@@ -737,10 +764,14 @@ export default function ChatInterface() {
       setPendingPinMessageId(null);
       
   } catch (error) {
-    console.error('[LEDGER] Error saving to ledger:', error);
+    console.error('[LEDGER] Full error object:', error);
+    console.error('[LEDGER] Error name:', (error as any)?.name);
+    console.error('[LEDGER] Error message:', (error as any)?.message);
+    console.error('[LEDGER] Error stack:', (error as any)?.stack);
+    
     toast({
       title: "Error",
-      description: error instanceof Error ? error.message : "Failed to save to ledger",
+      description: error instanceof Error ? `${error.name}: ${error.message}` : "Failed to save to ledger",
       variant: "destructive",
     });
   } finally {
@@ -1137,7 +1168,17 @@ export default function ChatInterface() {
                   <div className="flex gap-2">
                     <Button 
                       size="sm" 
-                      onClick={() => saveToLedger(pendingPinMessageId!, pendingPinContent)}
+                      onClick={() => {
+                        console.log('[BUTTON] Save to Ledger button clicked!', { 
+                          pendingPinMessageId, 
+                          pendingPinContent: pendingPinContent?.substring(0, 50) 
+                        });
+                        try {
+                          saveToLedger(pendingPinMessageId!, pendingPinContent!);
+                        } catch (err) {
+                          console.error('[BUTTON] Immediate error:', err);
+                        }
+                      }}
                       disabled={loading}
                     >
                       Save to Ledger
