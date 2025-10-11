@@ -77,8 +77,7 @@ export default function ChatInterface() {
   const [attachedKnowledge, setAttachedKnowledge] = useState<KnowledgeItem[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
-  const [pendingPinContent, setPendingPinContent] = useState<string | null>(null);
-  const [pendingPinMessageId, setPendingPinMessageId] = useState<string | null>(null);
+  const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -129,9 +128,20 @@ export default function ChatInterface() {
       const contentAfterPin = lastMessage.content.substring(pinIndex + 1, pinIndex + 151).trim();
       
       if (contentAfterPin.length > 0) {
-        setPendingPinContent(contentAfterPin);
-        setPendingPinMessageId(lastMessage.id);
-        setShowPinPrompt(true);
+        // Add to queue if not already there
+        setPinQueue(prev => {
+          const alreadyQueued = prev.some(p => p.messageId === lastMessage.id);
+          if (alreadyQueued) return prev;
+          
+          const newQueue = [...prev, { messageId: lastMessage.id, content: contentAfterPin }];
+          
+          // Show prompt if this is the first item
+          if (prev.length === 0) {
+            setShowPinPrompt(true);
+          }
+          
+          return newQueue;
+        });
       }
     }
   }, [messages]);
@@ -758,10 +768,11 @@ export default function ChatInterface() {
         description: `Hash: ${data.body_hash.substring(0, 16)}...`,
       });
       
-      // Clear the prompt
-      setShowPinPrompt(false);
-      setPendingPinContent(null);
-      setPendingPinMessageId(null);
+      // Remove from queue and show next or close
+      setPinQueue(prev => prev.slice(1));
+      if (pinQueue.length <= 1) {
+        setShowPinPrompt(false);
+      }
       
   } catch (error) {
     console.error('[LEDGER] Full error object:', error);
@@ -1090,21 +1101,33 @@ export default function ChatInterface() {
                                    Forward to {config.name}
                                  </DropdownMenuItem>
                                ))}
-                             {!message.ledger && (
-                               <DropdownMenuItem
-                                 onClick={() => {
+                              {!message.ledger && (
+                                <DropdownMenuItem
+                                  onClick={() => {
                                     const content = message.content.includes('📍') 
                                       ? message.content.substring(message.content.indexOf('📍') + 1, message.content.indexOf('📍') + 151).trim()
                                       : message.content.substring(0, 150);
-                                   setPendingPinContent(content);
-                                   setPendingPinMessageId(message.id);
-                                   setShowPinPrompt(true);
-                                 }}
-                                 className="gap-2"
-                               >
-                                 📍 Save to Ledger
-                               </DropdownMenuItem>
-                             )}
+                                    
+                                    // Add to queue
+                                    setPinQueue(prev => {
+                                      const alreadyQueued = prev.some(p => p.messageId === message.id);
+                                      if (alreadyQueued) return prev;
+                                      
+                                      const newQueue = [...prev, { messageId: message.id, content }];
+                                      
+                                      // Show prompt if this is the first item
+                                      if (prev.length === 0) {
+                                        setShowPinPrompt(true);
+                                      }
+                                      
+                                      return newQueue;
+                                    });
+                                  }}
+                                  className="gap-2"
+                                >
+                                  📍 Save to Ledger
+                                </DropdownMenuItem>
+                              )}
                            </DropdownMenuContent>
                          </DropdownMenu>
                        )}
@@ -1153,30 +1176,31 @@ export default function ChatInterface() {
         </ScrollArea>
 
         {/* Pin Prompt Dialog */}
-        {showPinPrompt && pendingPinContent && (
+        {showPinPrompt && pinQueue.length > 0 && (
           <div className="fixed bottom-24 right-8 z-50 animate-in fade-in slide-in-from-bottom-4">
             <Card className="p-4 shadow-lg border-2 border-primary max-w-md">
               <div className="flex items-start gap-3">
                 <div className="text-2xl">📍</div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-sm mb-1">
-                    Anchor this memory to the blockchain?
-                  </h3>
-                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                    {pendingPinContent}
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-sm">
+                      Anchor this memory to the blockchain?
+                    </h3>
+                    {pinQueue.length > 1 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {pinQueue.length} queued
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3 max-h-20 overflow-y-auto">
+                    {pinQueue[0].content}
                   </p>
                   <div className="flex gap-2">
                     <Button 
-                      size="sm" 
-                      onClick={() => {
-                        console.log('[BUTTON] Save to Ledger button clicked!', { 
-                          pendingPinMessageId, 
-                          pendingPinContent: pendingPinContent?.substring(0, 50) 
-                        });
-                        try {
-                          saveToLedger(pendingPinMessageId!, pendingPinContent!);
-                        } catch (err) {
-                          console.error('[BUTTON] Immediate error:', err);
+                      size="sm"
+                      onClick={async () => {
+                        if (pinQueue[0]) {
+                          await saveToLedger(pinQueue[0].messageId, pinQueue[0].content);
                         }
                       }}
                       disabled={loading}
@@ -1187,12 +1211,15 @@ export default function ChatInterface() {
                       size="sm" 
                       variant="outline"
                       onClick={() => {
-                        setShowPinPrompt(false);
-                        setPendingPinContent(null);
-                        setPendingPinMessageId(null);
+                        // Remove first item from queue
+                        setPinQueue(prev => prev.slice(1));
+                        // Close if queue is empty
+                        if (pinQueue.length <= 1) {
+                          setShowPinPrompt(false);
+                        }
                       }}
                     >
-                      Cancel
+                      {pinQueue.length > 1 ? 'Skip (Next)' : 'Cancel'}
                     </Button>
                   </div>
                 </div>
