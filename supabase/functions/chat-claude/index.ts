@@ -138,10 +138,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in chat-claude function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  return new Response(JSON.stringify({ error: errorMessage }), {
+    // ...
+  });
+}
+
 });
