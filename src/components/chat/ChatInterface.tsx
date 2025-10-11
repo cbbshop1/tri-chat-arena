@@ -126,7 +126,7 @@ export default function ChatInterface() {
     // Only check messages that aren't already ledger-saved
     if (!lastMessage.ledger && lastMessage.content.includes('📍')) {
       const pinIndex = lastMessage.content.indexOf('📍');
-      const contentAfterPin = lastMessage.content.substring(pinIndex + 1).trim();
+      const contentAfterPin = lastMessage.content.substring(pinIndex + 1, pinIndex + 151).trim();
       
       if (contentAfterPin.length > 0) {
         setPendingPinContent(contentAfterPin);
@@ -1093,9 +1093,9 @@ export default function ChatInterface() {
                              {!message.ledger && (
                                <DropdownMenuItem
                                  onClick={() => {
-                                   const content = message.content.includes('📍') 
-                                     ? message.content.substring(message.content.indexOf('📍') + 1).trim()
-                                     : message.content;
+                                    const content = message.content.includes('📍') 
+                                      ? message.content.substring(message.content.indexOf('📍') + 1, message.content.indexOf('📍') + 151).trim()
+                                      : message.content.substring(0, 150);
                                    setPendingPinContent(content);
                                    setPendingPinMessageId(message.id);
                                    setShowPinPrompt(true);
