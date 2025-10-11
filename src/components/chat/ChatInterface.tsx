@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KnowledgeManager from './KnowledgeManager';
 import { useAuth } from '@/hooks/useAuth';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
@@ -128,20 +129,29 @@ export default function ChatInterface() {
       const contentAfterPin = lastMessage.content.substring(pinIndex + 1, pinIndex + 151).trim();
       
       if (contentAfterPin.length > 0) {
-        // Add to queue if not already there
-        setPinQueue(prev => {
-          const alreadyQueued = prev.some(p => p.messageId === lastMessage.id);
-          if (alreadyQueued) return prev;
-          
-          const newQueue = [...prev, { messageId: lastMessage.id, content: contentAfterPin }];
-          
-          // Show prompt if this is the first item
-          if (prev.length === 0) {
-            setShowPinPrompt(true);
-          }
-          
-          return newQueue;
-        });
+        // Auto-save user pins immediately
+        if (lastMessage.role === 'user') {
+          saveToLedger(lastMessage.id, contentAfterPin);
+          toast({
+            title: "Memory Anchored",
+            description: "Your pin has been saved to the ledger.",
+          });
+        } else {
+          // AI pins go to queue and show modal
+          setPinQueue(prev => {
+            const alreadyQueued = prev.some(p => p.messageId === lastMessage.id);
+            if (alreadyQueued) return prev;
+            
+            const newQueue = [...prev, { messageId: lastMessage.id, content: contentAfterPin }];
+            
+            // Show modal if this is the first item
+            if (prev.length === 0) {
+              setShowPinPrompt(true);
+            }
+            
+            return newQueue;
+          });
+        }
       }
     }
   }, [messages]);
@@ -1175,58 +1185,61 @@ export default function ChatInterface() {
           )}
         </ScrollArea>
 
-        {/* Pin Prompt Dialog */}
-        {showPinPrompt && pinQueue.length > 0 && (
-          <div className="fixed bottom-24 right-8 z-50 animate-in fade-in slide-in-from-bottom-4">
-            <Card className="p-4 shadow-lg border-2 border-primary max-w-md">
-              <div className="flex items-start gap-3">
-                <div className="text-2xl">📍</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm">
-                      Anchor this memory to the blockchain?
-                    </h3>
-                    {pinQueue.length > 1 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {pinQueue.length} queued
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3 max-h-20 overflow-y-auto">
-                    {pinQueue[0].content}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm"
-                      onClick={async () => {
-                        if (pinQueue[0]) {
-                          await saveToLedger(pinQueue[0].messageId, pinQueue[0].content);
-                        }
-                      }}
-                      disabled={loading}
-                    >
-                      Save to Ledger
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => {
-                        // Remove first item from queue
-                        setPinQueue(prev => prev.slice(1));
-                        // Close if queue is empty
-                        if (pinQueue.length <= 1) {
-                          setShowPinPrompt(false);
-                        }
-                      }}
-                    >
-                      {pinQueue.length > 1 ? 'Skip (Next)' : 'Cancel'}
-                    </Button>
-                  </div>
-                </div>
+        {/* Pin Prompt Modal Dialog */}
+        <AlertDialog open={showPinPrompt && pinQueue.length > 0} onOpenChange={(open) => {
+          if (!open && pinQueue.length === 0) {
+            setShowPinPrompt(false);
+          }
+        }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📍</span>
+                <AlertDialogTitle>Anchor this memory to the blockchain?</AlertDialogTitle>
+                {pinQueue.length > 1 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {pinQueue.length} queued
+                  </Badge>
+                )}
               </div>
-            </Card>
-          </div>
-        )}
+              <AlertDialogDescription asChild>
+                <div className="max-h-32 overflow-y-auto text-sm mt-2">
+                  {pinQueue[0]?.content}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  // Remove first item from queue
+                  setPinQueue(prev => prev.slice(1));
+                  // Close if queue is empty
+                  if (pinQueue.length <= 1) {
+                    setShowPinPrompt(false);
+                  }
+                }}
+              >
+                {pinQueue.length > 1 ? 'Skip (Next)' : 'Cancel'}
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  if (pinQueue[0]) {
+                    await saveToLedger(pinQueue[0].messageId, pinQueue[0].content);
+                    // Remove first item from queue
+                    setPinQueue(prev => prev.slice(1));
+                    // Close if queue is empty
+                    if (pinQueue.length <= 1) {
+                      setShowPinPrompt(false);
+                    }
+                  }
+                }}
+                disabled={loading}
+              >
+                Save to Ledger
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
