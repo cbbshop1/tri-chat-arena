@@ -4,7 +4,7 @@ import { useRoles } from "@/hooks/useRoles";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { LogIn, LogOut, User, Crown } from "lucide-react";
+import { LogIn, LogOut, User, Crown, Database } from "lucide-react";
 import logo from "@/assets/logo.png";
 
 const Index = () => {
@@ -39,6 +39,10 @@ const Index = () => {
                 <User className="w-4 h-4" />
                 {user.email}
               </div>
+              <Button variant="outline" onClick={() => navigate("/memories")} size="sm">
+                <Database className="w-4 h-4 mr-2" />
+                Memory Ledger
+              </Button>
               {isAdmin && (
                 <Button variant="outline" onClick={() => navigate("/admin")} size="sm">
                   <Crown className="w-4 h-4 mr-2" />
