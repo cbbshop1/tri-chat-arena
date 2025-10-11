@@ -137,11 +137,11 @@ serve(async (req) => {
         'Connection': 'keep-alive'
       },
     });
-  } catch (error) {
-    console.error('Error in chat-deepseek function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+ } catch (error) {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  return new Response(JSON.stringify({ error: errorMessage }), {
+    // ...
+  });
+}
+
 });
