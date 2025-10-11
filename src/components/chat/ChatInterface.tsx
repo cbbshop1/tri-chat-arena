@@ -677,6 +677,8 @@ export default function ChatInterface() {
     try {
       setLoading(true);
       
+      console.log('[LEDGER] Starting save to ledger...', { messageId, contentLength: content.length });
+      
       // Determine agent_id based on current AI model
       const message = messages.find(m => m.id === messageId);
       let agentId = 'ME'; // Default for user messages
@@ -699,10 +701,14 @@ export default function ChatInterface() {
         }
       };
       
+      console.log('[LEDGER] Payload created:', payload);
+      
       // Call the save-to-ledger edge function
       const { data, error } = await supabase.functions.invoke('save-to-ledger', {
         body: payload
       });
+      
+      console.log('[LEDGER] Response received:', { data, error });
       
       if (error) throw error;
       
@@ -730,17 +736,17 @@ export default function ChatInterface() {
       setPendingPinContent(null);
       setPendingPinMessageId(null);
       
-    } catch (error) {
-      console.error('Error saving to ledger:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save to ledger",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (error) {
+    console.error('[LEDGER] Error saving to ledger:', error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to save to ledger",
+      variant: "destructive",
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSend = async () => {
     if (!input.trim() || loading || !currentSessionId) return;
