@@ -33,6 +33,11 @@ interface Message {
   ai_model?: SpecificAI;
   target_ai?: SpecificAI | 'all';
   created_at: string;
+  ledger?: {
+    entry_id: string;
+    body_hash: string;
+    prev_hash: string | null;
+  };
 }
 
 interface ChatFile {
@@ -71,6 +76,9 @@ export default function ChatInterface() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [attachedKnowledge, setAttachedKnowledge] = useState<KnowledgeItem[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pendingPinContent, setPendingPinContent] = useState<string | null>(null);
+  const [pendingPinMessageId, setPendingPinMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -108,6 +116,25 @@ export default function ChatInterface() {
       textarea.style.height = Math.min(scrollHeight, maxHeight) + 'px';
     }
   }, [input]);
+
+  // Detect pin in messages
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    
+    // Only check messages that aren't already ledger-saved
+    if (!lastMessage.ledger && lastMessage.content.includes('📍')) {
+      const pinIndex = lastMessage.content.indexOf('📍');
+      const contentAfterPin = lastMessage.content.substring(pinIndex + 1).trim();
+      
+      if (contentAfterPin.length > 0) {
+        setPendingPinContent(contentAfterPin);
+        setPendingPinMessageId(lastMessage.id);
+        setShowPinPrompt(true);
+      }
+    }
+  }, [messages]);
 
   const loadSessions = async () => {
     try {
@@ -646,6 +673,75 @@ export default function ChatInterface() {
     }
   };
 
+  const saveToLedger = async (messageId: string, content: string) => {
+    try {
+      setLoading(true);
+      
+      // Determine agent_id based on current AI model
+      const message = messages.find(m => m.id === messageId);
+      let agentId = 'ME'; // Default for user messages
+      
+      if (message?.ai_model === 'chatgpt') agentId = 'GP';
+      else if (message?.ai_model === 'claude') agentId = 'CL';
+      else if (message?.ai_model === 'deepseek') agentId = 'DS';
+      
+      // Create the payload
+      const payload = {
+        agent_id: agentId,
+        entry_type: 'anchor_memory',
+        body_json: {
+          id: currentSessionId || 'unknown',
+          t: new Date().toISOString(),
+          actor: user?.id || 'anonymous',
+          summary: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
+          content: content,
+          message_id: messageId
+        }
+      };
+      
+      // Call the save-to-ledger edge function
+      const { data, error } = await supabase.functions.invoke('save-to-ledger', {
+        body: payload
+      });
+      
+      if (error) throw error;
+      
+      // Update the message with ledger info
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { 
+              ...msg, 
+              ledger: {
+                entry_id: data.ledger_entry_id,
+                body_hash: data.body_hash,
+                prev_hash: data.prev_hash
+              }
+            }
+          : msg
+      ));
+      
+      toast({
+        title: "✅ Memory Anchored",
+        description: `Hash: ${data.body_hash.substring(0, 16)}...`,
+      });
+      
+      // Clear the prompt
+      setShowPinPrompt(false);
+      setPendingPinContent(null);
+      setPendingPinMessageId(null);
+      
+    } catch (error) {
+      console.error('Error saving to ledger:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save to ledger",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || loading || !currentSessionId) return;
 
@@ -936,7 +1032,7 @@ export default function ChatInterface() {
                       </Badge>
                      )}
                      <div className="flex items-start justify-between gap-2">
-                       <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+                     <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
                        {message.role === 'assistant' && message.ai_model && (
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
@@ -957,10 +1053,47 @@ export default function ChatInterface() {
                                    Forward to {config.name}
                                  </DropdownMenuItem>
                                ))}
+                             {!message.ledger && (
+                               <DropdownMenuItem
+                                 onClick={() => {
+                                   const content = message.content.includes('📍') 
+                                     ? message.content.substring(message.content.indexOf('📍') + 1).trim()
+                                     : message.content;
+                                   setPendingPinContent(content);
+                                   setPendingPinMessageId(message.id);
+                                   setShowPinPrompt(true);
+                                 }}
+                                 className="gap-2"
+                               >
+                                 📍 Save to Ledger
+                               </DropdownMenuItem>
+                             )}
                            </DropdownMenuContent>
                          </DropdownMenu>
                        )}
                      </div>
+                     {message.ledger && (
+                       <div className="mt-2 pt-2 border-t border-border/50">
+                         <div className="flex items-center gap-2">
+                           <Badge 
+                             variant="outline" 
+                             className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
+                             onClick={() => {
+                               navigator.clipboard.writeText(message.ledger!.body_hash);
+                               toast({
+                                 title: "Hash copied",
+                                 description: "Cryptographic hash copied to clipboard",
+                               });
+                             }}
+                           >
+                             ✅ Ledger: {message.ledger.body_hash.substring(0, 8)}...{message.ledger.body_hash.substring(message.ledger.body_hash.length - 6)}
+                           </Badge>
+                           <span className="text-xs text-muted-foreground">
+                             (click to copy)
+                           </span>
+                         </div>
+                       </div>
+                     )}
                      <p className="text-xs text-muted-foreground mt-1">
                        {new Date(message.created_at).toLocaleTimeString()}
                      </p>
@@ -981,6 +1114,45 @@ export default function ChatInterface() {
             </div>
           )}
         </ScrollArea>
+
+        {/* Pin Prompt Dialog */}
+        {showPinPrompt && pendingPinContent && (
+          <div className="fixed bottom-24 right-8 z-50 animate-in fade-in slide-in-from-bottom-4">
+            <Card className="p-4 shadow-lg border-2 border-primary max-w-md">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">📍</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm mb-1">
+                    Anchor this memory to the blockchain?
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
+                    {pendingPinContent}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={() => saveToLedger(pendingPinMessageId!, pendingPinContent)}
+                      disabled={loading}
+                    >
+                      Save to Ledger
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setShowPinPrompt(false);
+                        setPendingPinContent(null);
+                        setPendingPinMessageId(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
