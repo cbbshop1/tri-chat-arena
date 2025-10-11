@@ -1,5 +1,8 @@
 project_id = "ywohajmeijjiubesykcu"
 
+[functions.save-to-ledger]
+verify_jwt = false
+
 [functions.chat-openai]
 verify_jwt = false
 
