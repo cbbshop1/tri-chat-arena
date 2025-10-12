@@ -15,7 +15,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KnowledgeManager from './KnowledgeManager';
 import { useAuth } from '@/hooks/useAuth';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
@@ -77,7 +76,6 @@ export default function ChatInterface() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [attachedKnowledge, setAttachedKnowledge] = useState<KnowledgeItem[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
-  const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,14 +140,7 @@ export default function ChatInterface() {
             const alreadyQueued = prev.some(p => p.messageId === lastMessage.id);
             if (alreadyQueued) return prev;
             
-            const newQueue = [...prev, { messageId: lastMessage.id, content: contentAfterPin }];
-            
-            // Show modal if this is the first item
-            if (prev.length === 0) {
-              setShowPinPrompt(true);
-            }
-            
-            return newQueue;
+            return [...prev, { messageId: lastMessage.id, content: contentAfterPin }];
           });
         }
       }
@@ -778,12 +769,6 @@ export default function ChatInterface() {
         description: `Hash: ${data.body_hash.substring(0, 16)}...`,
       });
       
-      // Remove from queue and show next or close
-      setPinQueue(prev => prev.slice(1));
-      if (pinQueue.length <= 1) {
-        setShowPinPrompt(false);
-      }
-      
   } catch (error) {
     console.error('[LEDGER] Full error object:', error);
     console.error('[LEDGER] Error name:', (error as any)?.name);
@@ -1123,14 +1108,7 @@ export default function ChatInterface() {
                                       const alreadyQueued = prev.some(p => p.messageId === message.id);
                                       if (alreadyQueued) return prev;
                                       
-                                      const newQueue = [...prev, { messageId: message.id, content }];
-                                      
-                                      // Show prompt if this is the first item
-                                      if (prev.length === 0) {
-                                        setShowPinPrompt(true);
-                                      }
-                                      
-                                      return newQueue;
+                                      return [...prev, { messageId: message.id, content }];
                                     });
                                   }}
                                   className="gap-2"
@@ -1185,61 +1163,50 @@ export default function ChatInterface() {
           )}
         </ScrollArea>
 
-        {/* Pin Prompt Modal Dialog */}
-        <AlertDialog open={showPinPrompt && pinQueue.length > 0} onOpenChange={(open) => {
-          if (!open && pinQueue.length === 0) {
-            setShowPinPrompt(false);
-          }
-        }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <div className="flex items-center gap-2">
+        {/* Pin Prompt - Non-Blocking Docked Card */}
+        {pinQueue.length > 0 && (
+          <Card className="fixed bottom-20 right-4 w-80 md:w-96 max-h-[400px] z-50 shadow-lg border-2 border-primary/50 bg-card backdrop-blur-md animate-in slide-in-from-bottom-4">
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <span className="text-2xl">📍</span>
-                <AlertDialogTitle>Anchor this memory to the blockchain?</AlertDialogTitle>
+                <h3 className="font-semibold text-sm">Anchor this memory to the blockchain?</h3>
                 {pinQueue.length > 1 && (
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-xs ml-auto">
                     {pinQueue.length} queued
                   </Badge>
                 )}
               </div>
-              <AlertDialogDescription asChild>
-                <div className="max-h-32 overflow-y-auto text-sm mt-2">
+              <ScrollArea className="max-h-32 mb-4">
+                <p className="text-sm text-muted-foreground pr-4">
                   {pinQueue[0]?.content}
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel
-                onClick={() => {
-                  // Remove first item from queue
-                  setPinQueue(prev => prev.slice(1));
-                  // Close if queue is empty
-                  if (pinQueue.length <= 1) {
-                    setShowPinPrompt(false);
-                  }
-                }}
-              >
-                {pinQueue.length > 1 ? 'Skip (Next)' : 'Cancel'}
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={async () => {
-                  if (pinQueue[0]) {
-                    await saveToLedger(pinQueue[0].messageId, pinQueue[0].content);
-                    // Remove first item from queue
+                </p>
+              </ScrollArea>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
                     setPinQueue(prev => prev.slice(1));
-                    // Close if queue is empty
-                    if (pinQueue.length <= 1) {
-                      setShowPinPrompt(false);
+                  }}
+                >
+                  {pinQueue.length > 1 ? 'Skip (Next)' : 'Skip'}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (pinQueue[0]) {
+                      await saveToLedger(pinQueue[0].messageId, pinQueue[0].content);
+                      setPinQueue(prev => prev.slice(1));
                     }
-                  }
-                }}
-                disabled={loading}
-              >
-                Save to Ledger
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                  }}
+                  disabled={loading}
+                >
+                  Save to Ledger
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Input */}
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
