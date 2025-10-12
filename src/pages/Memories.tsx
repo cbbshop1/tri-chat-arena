@@ -25,10 +25,13 @@ const Memories = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchEntries = async () => {
+    if (!user) return;
+    
     try {
       const { data, error } = await supabase
         .from('ledger_entries')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -54,8 +57,10 @@ const Memories = () => {
   };
 
   useEffect(() => {
-    fetchEntries();
-  }, []);
+    if (user) {
+      fetchEntries();
+    }
+  }, [user]);
 
   const handleAddEntry = (newEntry: any) => {
     setEntries(prev => [newEntry, ...prev]);
@@ -117,7 +122,7 @@ const Memories = () => {
                   AI Memory Ledger
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  On-chain timestamped continuity anchor system
+                  Private Research Instance • User-scoped Memory
                 </p>
               </div>
             </div>

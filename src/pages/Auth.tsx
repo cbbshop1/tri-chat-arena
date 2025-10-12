@@ -193,16 +193,15 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Welcome</CardTitle>
+          <CardTitle>Private Research Instance</CardTitle>
           <CardDescription>
-            Sign in to your account or create a new one to start chatting
+            This is a private research platform. New signups are currently disabled.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-1">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
@@ -261,7 +260,8 @@ const Auth = () => {
               </form>
             </TabsContent>
             
-            <TabsContent value="signup">
+            {/* Signup disabled for private research instance */}
+            <TabsContent value="signup" style={{ display: 'none' }}>
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>

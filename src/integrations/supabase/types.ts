@@ -135,6 +135,7 @@ export type Database = {
           l2_tx: string | null
           root_hash: string
           to_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -145,6 +146,7 @@ export type Database = {
           l2_tx?: string | null
           root_hash: string
           to_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -155,6 +157,7 @@ export type Database = {
           l2_tx?: string | null
           root_hash?: string
           to_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -170,6 +173,8 @@ export type Database = {
           id: string
           l2_tx: string | null
           prev_hash: string | null
+          shared: boolean
+          user_id: string
         }
         Insert: {
           agent_id: string
@@ -182,6 +187,8 @@ export type Database = {
           id?: string
           l2_tx?: string | null
           prev_hash?: string | null
+          shared?: boolean
+          user_id: string
         }
         Update: {
           agent_id?: string
@@ -194,6 +201,8 @@ export type Database = {
           id?: string
           l2_tx?: string | null
           prev_hash?: string | null
+          shared?: boolean
+          user_id?: string
         }
         Relationships: []
       }

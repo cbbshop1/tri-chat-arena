@@ -19,6 +19,39 @@ serve(async (req) => {
   try {
     console.log('[SAVE-TO-LEDGER] Function invoked');
     
+    // Get user from auth header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create Supabase client to verify user
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing environment variables');
+    }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    
+    if (userError || !user) {
+      console.error('[SAVE-TO-LEDGER] Auth error:', userError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[SAVE-TO-LEDGER] Authenticated user:', user.id);
+    
     // Parse the incoming request body
     const requestBody = await req.json();
     console.log('[SAVE-TO-LEDGER] Request body:', JSON.stringify(requestBody, null, 2));
@@ -85,24 +118,24 @@ serve(async (req) => {
     console.log('[SAVE-TO-LEDGER] Sanitized body_json');
 
     // Create Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      throw new Error('Missing environment variables');
+    if (!supabaseServiceRoleKey) {
+      throw new Error('Missing service role key');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // Insert into ledger_entries
+    // Insert into ledger_entries with user_id
     // The trigger will automatically compute body_hash and prev_hash
-    console.log('[SAVE-TO-LEDGER] Inserting into ledger_entries...');
+    console.log('[SAVE-TO-LEDGER] Inserting into ledger_entries for user:', user.id);
     const { data, error } = await supabase
       .from('ledger_entries')
       .insert({ 
         agent_id, 
         entry_type, 
-        body_json: sanitizedBodyJson 
+        body_json: sanitizedBodyJson,
+        user_id: user.id
       })
       .select()
       .single();

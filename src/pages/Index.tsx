@@ -1,8 +1,8 @@
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoles } from "@/hooks/useRoles";
-import { SubscriptionBanner } from "@/components/SubscriptionBanner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { LogIn, LogOut, User, Crown, Database } from "lucide-react";
 import logo from "@/assets/logo.png";
@@ -61,7 +61,14 @@ const Index = () => {
             </Button>
           )}
         </div>
-        <SubscriptionBanner />
+        <div className="flex items-center justify-center gap-2 p-3 bg-card/30 border border-border/50 rounded-lg backdrop-blur-sm">
+          <Badge variant="secondary" className="font-mono text-xs">
+            Private Research Instance
+          </Badge>
+          <span className="text-sm text-muted-foreground">
+            User-scoped memory • No public access
+          </span>
+        </div>
       </div>
       <ChatInterface />
     </div>
