@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Hash, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AddEntryFormProps {
   onAddEntry: (entry: any) => void;
@@ -20,11 +21,21 @@ export function AddEntryForm({ onAddEntry }: AddEntryFormProps) {
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!agentId.trim() || !content.trim()) {
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to save entries to the ledger",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -35,35 +46,37 @@ export function AddEntryForm({ onAddEntry }: AddEntryFormProps) {
         agent_id: agentId.trim(),
         entry_type: type,
         content: content.trim(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        actor: user.id
       };
 
-      const { data, error } = await supabase
-        .from('ledger_entries')
-        .insert({
+      const { data, error } = await supabase.functions.invoke('save-to-ledger', {
+        body: {
           agent_id: agentId.trim(),
           entry_type: type,
-          body_json: bodyJson,
-          body_hash: '',
-        } as any)
-        .select()
-        .single();
+          body_json: bodyJson
+        }
+      });
 
       if (error) {
-        console.error('Database error:', error);
+        console.error('[AddEntryForm] Edge function error:', error);
         throw error;
       }
 
+      if (!data || !data.ledger_entry_id) {
+        throw new Error('Invalid response from save-to-ledger function');
+      }
+
       const entry = {
-        id: data.id,
-        timestamp: data.created_at,
+        id: data.ledger_entry_id,
+        timestamp: new Date().toISOString(),
         hash: data.body_hash,
-        agentId: data.agent_id,
-        type: data.entry_type,
-        content: (data.body_json as any)?.content || content.trim(),
+        agentId: agentId.trim(),
+        type: type,
+        content: content.trim(),
         size: new Blob([content]).size,
-        prevHash: data.prev_hash,
-        batchId: data.batch_id
+        prevHash: data.prev_hash || null,
+        batchId: null
       };
 
       onAddEntry(entry);
@@ -75,10 +88,10 @@ export function AddEntryForm({ onAddEntry }: AddEntryFormProps) {
 
       setContent("");
     } catch (error) {
-      console.error('Error adding entry:', error);
+      console.error('[AddEntryForm] Error adding entry:', error);
       toast({
         title: "Error",
-        description: "Failed to add entry to ledger",
+        description: error instanceof Error ? error.message : "Failed to add entry to ledger",
         variant: "destructive"
       });
     } finally {
