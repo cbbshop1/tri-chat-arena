@@ -1185,13 +1185,11 @@ export default function ChatInterface() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden">
-                <div className="h-full">
-                  <LedgerSearcher
-                    onAttachEntry={handleAttachLedgerEntry}
-                    attachedEntryIds={attachedLedgerEntries.map(e => e.id)}
-                  />
-                </div>
+              <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden h-full">
+                <LedgerSearcher
+                  onAttachEntry={handleAttachLedgerEntry}
+                  attachedEntryIds={attachedLedgerEntries.map(e => e.id)}
+                />
               </TabsContent>
             </Tabs>
           </div>
