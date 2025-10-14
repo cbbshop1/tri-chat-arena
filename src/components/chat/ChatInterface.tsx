@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KnowledgeManager from './KnowledgeManager';
+import LedgerSearcher from './LedgerSearcher';
 import { useAuth } from '@/hooks/useAuth';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
@@ -804,6 +805,33 @@ export default function ChatInterface() {
     setAttachedLedgerEntries(prev => [...prev, entry]);
   };
 
+  const handleAttachLedgerEntry = (entry: any) => {
+    // Prevent duplicates
+    if (attachedLedgerEntries.some(e => e.id === entry.id)) {
+      toast({
+        title: "Already attached",
+        description: "This memory is already in your chat context",
+      });
+      return;
+    }
+    
+    // Transform the entry to match our LedgerEntry interface
+    const transformedEntry: LedgerEntry = {
+      id: entry.id,
+      content: JSON.stringify(entry.body_json),
+      agentId: entry.agent_id,
+      type: entry.entry_type,
+      timestamp: entry.created_at
+    };
+    
+    setAttachedLedgerEntries(prev => [...prev, transformedEntry]);
+    
+    toast({
+      title: "Memory attached",
+      description: "This memory will be included in your next message",
+    });
+  };
+
   const exportChatSession = async () => {
     if (!currentSessionId) {
       toast({
@@ -1105,6 +1133,9 @@ export default function ChatInterface() {
                   <Bot className="w-4 h-4 mr-1" />
                   Knowledge
                 </TabsTrigger>
+                <TabsTrigger value="memories" className="flex-1">
+                  🧠 Memories
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="chats" className="flex-1 mt-0">
@@ -1149,6 +1180,15 @@ export default function ChatInterface() {
                   <KnowledgeManager 
                     knowledgeBase={knowledgeBase} 
                     onRefresh={loadKnowledgeBase}
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden">
+                <div className="h-full">
+                  <LedgerSearcher
+                    onAttachEntry={handleAttachLedgerEntry}
+                    attachedEntryIds={attachedLedgerEntries.map(e => e.id)}
                   />
                 </div>
               </TabsContent>
