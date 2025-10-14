@@ -120,7 +120,8 @@ serve(async (req) => {
           ...conversation_history,
           { role: 'user', content: message }
         ],
-        temperature: 0.7
+        temperature: 0.7,
+        stream: true
       }),
     });
 
@@ -130,11 +131,14 @@ serve(async (req) => {
       throw new Error(`OpenAI API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const reply = data.choices[0].message.content;
-
-    return new Response(JSON.stringify({ reply }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Return the stream directly
+    return new Response(response.body, {
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

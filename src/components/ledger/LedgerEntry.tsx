@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Clock, Hash, User, Brain, ChevronDown, ChevronRight, Shield, Link as LinkIcon } from "lucide-react";
+import { Clock, Hash, User, Brain, ChevronDown, ChevronRight, Shield, Link as LinkIcon, MessageSquare } from "lucide-react";
 
 interface LedgerEntryProps {
   id: string;
@@ -33,7 +33,12 @@ const typeIcons: Record<string, any> = {
   anchor_memory: LinkIcon
 };
 
-export function LedgerEntry({ entry }: { entry: LedgerEntryProps }) {
+interface LedgerEntryComponentProps {
+  entry: LedgerEntryProps;
+  onPinToChat?: (entry: { id: string; content: string; agentId: string; type: string; timestamp: string }) => void;
+}
+
+export function LedgerEntry({ entry, onPinToChat }: LedgerEntryComponentProps) {
   const [showDetails, setShowDetails] = useState(false);
   const Icon = typeIcons[entry.type] || Brain;
   const colorClass = typeColors[entry.type] || "text-foreground";
@@ -94,7 +99,26 @@ export function LedgerEntry({ entry }: { entry: LedgerEntryProps }) {
         </pre>
       </div>
 
-      <Collapsible open={showDetails} onOpenChange={setShowDetails}>
+      <div className="flex gap-2">
+        {onPinToChat && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs h-8 gap-2"
+            onClick={() => onPinToChat({
+              id: entry.id,
+              content: entry.content,
+              agentId: entry.agentId,
+              type: entry.type,
+              timestamp: entry.timestamp
+            })}
+          >
+            <MessageSquare className="h-3 w-3" />
+            Pin to Chat
+          </Button>
+        )}
+
+        <Collapsible open={showDetails} onOpenChange={setShowDetails} className="flex-1">
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
@@ -141,7 +165,8 @@ export function LedgerEntry({ entry }: { entry: LedgerEntryProps }) {
             )}
           </div>
         </CollapsibleContent>
-      </Collapsible>
+        </Collapsible>
+      </div>
     </Card>
   );
 }

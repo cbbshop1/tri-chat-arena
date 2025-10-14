@@ -121,7 +121,8 @@ serve(async (req) => {
         messages: [
           ...conversation_history,
           { role: 'user', content: message }
-        ]
+        ],
+        stream: true
       }),
     });
 
@@ -131,11 +132,14 @@ serve(async (req) => {
       throw new Error(`Anthropic API error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const reply = data.content[0].text;
-
-    return new Response(JSON.stringify({ reply }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Return the stream directly
+    return new Response(response.body, {
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { AddEntryForm } from "@/components/ledger/AddEntryForm";
 import { LedgerEntry } from "@/components/ledger/LedgerEntry";
 import { LedgerStats } from "@/components/ledger/LedgerStats";
+import { useToast } from "@/hooks/use-toast";
 import { LedgerFilters } from "@/components/ledger/LedgerFilters";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import logo from "@/assets/logo.png";
 const Memories = () => {
   const { user, signOut, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [entries, setEntries] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -64,6 +66,33 @@ const Memories = () => {
 
   const handleAddEntry = (newEntry: any) => {
     setEntries(prev => [newEntry, ...prev]);
+  };
+
+  const handlePinToChat = (entry: { id: string; content: string; agentId: string; type: string; timestamp: string }) => {
+    // Get existing pinned entries from sessionStorage
+    const existingPinned = sessionStorage.getItem('pinnedLedgerEntries');
+    let pinnedEntries = existingPinned ? JSON.parse(existingPinned) : [];
+    
+    // Check if already pinned
+    if (pinnedEntries.some((e: any) => e.id === entry.id)) {
+      toast({
+        title: "Already pinned",
+        description: "This entry is already pinned to chat",
+      });
+      return;
+    }
+    
+    // Add to pinned entries
+    pinnedEntries.push(entry);
+    sessionStorage.setItem('pinnedLedgerEntries', JSON.stringify(pinnedEntries));
+    
+    toast({
+      title: "Pinned to chat",
+      description: "Navigate to chat to use this memory",
+    });
+    
+    // Navigate to chat after a brief delay
+    setTimeout(() => navigate('/'), 500);
   };
 
   const filteredEntries = useMemo(() => {
@@ -214,7 +243,7 @@ const Memories = () => {
             <ScrollArea className="h-[600px] pr-4">
               <div className="space-y-4">
                 {filteredEntries.map((entry) => (
-                  <LedgerEntry key={entry.id} entry={entry} />
+                  <LedgerEntry key={entry.id} entry={entry} onPinToChat={handlePinToChat} />
                 ))}
               </div>
             </ScrollArea>

@@ -57,6 +57,14 @@ interface KnowledgeItem {
   created_at: string;
 }
 
+interface LedgerEntry {
+  id: string;
+  content: string;
+  agentId: string;
+  type: string;
+  timestamp: string;
+}
+
 const AI_CONFIGS = {
   chatgpt: { name: "ChatGPT", color: "chatgpt", icon: "🤖" },
   claude: { name: "Claude", color: "claude", icon: "🧠" },
@@ -76,6 +84,7 @@ export default function ChatInterface() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [attachedKnowledge, setAttachedKnowledge] = useState<KnowledgeItem[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
+  const [attachedLedgerEntries, setAttachedLedgerEntries] = useState<LedgerEntry[]>([]);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,9 +94,25 @@ export default function ChatInterface() {
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
   const { user, signOut } = useAuth();
 
-  // Load sessions on mount
+  // Load sessions on mount and check for pinned ledger entries
   useEffect(() => {
     loadSessions();
+    
+    // Check sessionStorage for pinned ledger entries
+    const pinnedEntries = sessionStorage.getItem('pinnedLedgerEntries');
+    if (pinnedEntries) {
+      try {
+        const entries = JSON.parse(pinnedEntries);
+        setAttachedLedgerEntries(entries);
+        sessionStorage.removeItem('pinnedLedgerEntries');
+        toast({
+          title: "Ledger entries attached",
+          description: `${entries.length} memory(s) added to context`,
+        });
+      } catch (error) {
+        console.error('Error loading pinned entries:', error);
+      }
+    }
   }, []);
 
   // Load messages when session changes
@@ -324,22 +349,19 @@ export default function ChatInterface() {
     // Prepend context to the message if available
     const messageWithContext = context ? `${context}\n\nUser Message: ${message}` : message;
     
-    // For DeepSeek, use streaming
+    // All AIs now use streaming
     if (ai === 'deepseek') {
       const result = await streamDeepSeek(messageWithContext, conversationHistory);
       return { reply: result.response, tempId: result.tempId };
+    } else if (ai === 'claude') {
+      const result = await streamClaude(messageWithContext, conversationHistory);
+      return { reply: result.response, tempId: result.tempId };
+    } else if (ai === 'chatgpt') {
+      const result = await streamOpenAI(messageWithContext, conversationHistory);
+      return { reply: result.response, tempId: result.tempId };
     }
     
-    const { data, error } = await supabase.functions.invoke(functionName, {
-      body: { 
-        message: messageWithContext,
-        conversation_history: conversationHistory,
-        sessionId: currentSessionId // Add sessionId for usage tracking
-      }
-    });
-
-    if (error) throw error;
-    return data.reply;
+    throw new Error(`Unknown AI: ${ai}`);
   };
 
   const streamDeepSeek = async (message: string, conversationHistory: any[]): Promise<{ response: string; tempId: string }> => {
@@ -416,6 +438,156 @@ export default function ChatInterface() {
     }
 
     // Return the full response and the temp ID so we can replace it with the real saved message
+    return { response: fullResponse, tempId: tempMessageId };
+  };
+
+  const streamClaude = async (message: string, conversationHistory: any[]): Promise<{ response: string; tempId: string }> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch(
+      `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/chat-claude`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          message,
+          conversation_history: conversationHistory,
+          sessionId: currentSessionId
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Claude streaming error: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    if (!reader) throw new Error('No reader available');
+
+    const tempMessageId = `temp-${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: tempMessageId,
+      content: '',
+      role: 'assistant',
+      ai_model: 'claude',
+      created_at: new Date().toISOString()
+    }]);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'content_block_delta') {
+                const delta = parsed.delta?.text || '';
+                fullResponse += delta;
+                
+                setMessages(prev => prev.map(msg =>
+                  msg.id === tempMessageId
+                    ? { ...msg, content: fullResponse }
+                    : msg
+                ));
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Claude streaming error:', error);
+      throw error;
+    }
+
+    return { response: fullResponse, tempId: tempMessageId };
+  };
+
+  const streamOpenAI = async (message: string, conversationHistory: any[]): Promise<{ response: string; tempId: string }> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch(
+      `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/chat-openai`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          message,
+          conversation_history: conversationHistory,
+          sessionId: currentSessionId
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`OpenAI streaming error: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+
+    if (!reader) throw new Error('No reader available');
+
+    const tempMessageId = `temp-${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: tempMessageId,
+      content: '',
+      role: 'assistant',
+      ai_model: 'chatgpt',
+      created_at: new Date().toISOString()
+    }]);
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              fullResponse += delta;
+              
+              setMessages(prev => prev.map(msg =>
+                msg.id === tempMessageId
+                  ? { ...msg, content: fullResponse }
+                  : msg
+              ));
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('OpenAI streaming error:', error);
+      throw error;
+    }
+
     return { response: fullResponse, tempId: tempMessageId };
   };
 
@@ -596,6 +768,15 @@ export default function ChatInterface() {
       });
     }
 
+    // Add attached ledger entries (memory references)
+    // EXTENSION POINT: This will be used by search UI (Option 2) and AI tools (Option 3)
+    if (attachedLedgerEntries.length > 0) {
+      context += '\n--- Memory Ledger References ---\n';
+      attachedLedgerEntries.forEach(entry => {
+        context += `[${entry.type}] ${entry.agentId} (${new Date(entry.timestamp).toLocaleString()}):\n${entry.content}\n\n`;
+      });
+    }
+
     return context;
   };
 
@@ -607,12 +788,20 @@ export default function ChatInterface() {
     setAttachedFiles(prev => prev.filter(file => file.id !== id));
   };
 
+  const removeAttachedLedgerEntry = (id: string) => {
+    setAttachedLedgerEntries(prev => prev.filter(entry => entry.id !== id));
+  };
+
   const addBackKnowledge = (item: KnowledgeItem) => {
     setAttachedKnowledge(prev => [...prev, item]);
   };
 
   const addBackFile = (file: ChatFile) => {
     setAttachedFiles(prev => [...prev, file]);
+  };
+
+  const addBackLedgerEntry = (entry: LedgerEntry) => {
+    setAttachedLedgerEntries(prev => [...prev, entry]);
   };
 
   const exportChatSession = async () => {
@@ -1212,7 +1401,7 @@ export default function ChatInterface() {
         <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto">
             {/* Context Info */}
-            {(attachedKnowledge.length > 0 || attachedFiles.length > 0) && (
+            {(attachedKnowledge.length > 0 || attachedFiles.length > 0 || attachedLedgerEntries.length > 0) && (
               <div className="mb-3 p-2 bg-card border border-border rounded-lg">
                 <div className="text-xs text-muted-foreground mb-2">Attached to this message:</div>
                 <div className="flex flex-wrap gap-1">
@@ -1238,6 +1427,19 @@ export default function ChatInterface() {
                         size="sm"
                         className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
                         onClick={() => removeAttachedFile(file.id)}
+                      >
+                        <X className="w-2 h-2" />
+                      </Button>
+                    </Badge>
+                  ))}
+                  {attachedLedgerEntries.map((entry) => (
+                    <Badge key={entry.id} variant="outline" className="text-xs group bg-purple-500/10 border-purple-500/30">
+                      🧠 {entry.type} - {entry.agentId}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                        onClick={() => removeAttachedLedgerEntry(entry.id)}
                       >
                         <X className="w-2 h-2" />
                       </Button>
