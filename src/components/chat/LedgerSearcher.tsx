@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Pin, Calendar, User, FileText } from 'lucide-react';
+import { Search, Pin, Calendar, User, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { highlightSearchTerms } from '@/lib/highlightText';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -53,6 +54,7 @@ export default function LedgerSearcher({ onAttachEntry, attachedEntryIds }: Ledg
   const [agentFilter, setAgentFilter] = useState('all');
   const [dateRange, setDateRange] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
 
   // Debounce search input
   useEffect(() => {
@@ -142,7 +144,23 @@ export default function LedgerSearcher({ onAttachEntry, attachedEntryIds }: Ledg
     return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
   };
 
+  const getFullContent = (content: any): string => {
+    return typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+  };
+
   const isAttached = (entryId: string) => attachedEntryIds.includes(entryId);
+  
+  const toggleExpanded = (entryId: string) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
 
   if (loading) {
     return (
@@ -238,8 +256,10 @@ export default function LedgerSearcher({ onAttachEntry, attachedEntryIds }: Ledg
             </Card>
           ) : (
             filteredEntries.map(entry => {
-              const content = truncateContent(entry.body_json);
+              const previewContent = truncateContent(entry.body_json);
+              const fullContent = getFullContent(entry.body_json);
               const attached = isAttached(entry.id);
+              const isExpanded = expandedEntries.has(entry.id);
 
               return (
                 <Card key={entry.id} className={`p-3 ${attached ? 'border-primary' : ''}`}>
@@ -269,9 +289,34 @@ export default function LedgerSearcher({ onAttachEntry, attachedEntryIds }: Ledg
                     {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
                   </div>
 
-                  <p className="text-sm">
-                    {debouncedSearch ? highlightSearchTerms(content, debouncedSearch) : content}
-                  </p>
+                  <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(entry.id)}>
+                    <div className="space-y-2">
+                      <p className="text-sm whitespace-pre-wrap">
+                        {isExpanded 
+                          ? (debouncedSearch ? highlightSearchTerms(fullContent, debouncedSearch) : fullContent)
+                          : (debouncedSearch ? highlightSearchTerms(previewContent, debouncedSearch) : previewContent)
+                        }
+                      </p>
+                      
+                      {fullContent.length > 150 && (
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 text-xs w-full">
+                            {isExpanded ? (
+                              <>
+                                <ChevronUp className="h-3 w-3 mr-1" />
+                                Show less
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="h-3 w-3 mr-1" />
+                                Show more
+                              </>
+                            )}
+                          </Button>
+                        </CollapsibleTrigger>
+                      )}
+                    </div>
+                  </Collapsible>
                 </Card>
               );
             })

@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KnowledgeManager from './KnowledgeManager';
 import LedgerSearcher from './LedgerSearcher';
 import { useAuth } from '@/hooks/useAuth';
+import Markdown from 'react-markdown';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
@@ -1304,7 +1305,13 @@ export default function ChatInterface() {
                       </Badge>
                      )}
                      <div className="flex items-start justify-between gap-2">
-                     <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+                       {message.role === 'assistant' ? (
+                         <div className="text-sm prose prose-sm dark:prose-invert max-w-none flex-1">
+                           <Markdown>{message.content}</Markdown>
+                         </div>
+                       ) : (
+                         <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+                       )}
                        {message.role === 'assistant' && message.ai_model && (
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
