@@ -1302,14 +1302,47 @@ export default function ChatInterface() {
                         {AI_CONFIGS[message.ai_model].name}
                       </Badge>
                      )}
-                     <div className="flex items-start justify-between gap-2">
-                       {message.role === 'assistant' ? (
-                         <div className="text-sm prose prose-sm dark:prose-invert max-w-none flex-1">
-                           <Markdown>{message.content}</Markdown>
-                         </div>
-                       ) : (
-                         <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
-                       )}
+                      <div className="flex items-start justify-between gap-2">
+                        {message.role === 'assistant' ? (
+                          <div className="text-sm prose prose-sm dark:prose-invert max-w-none flex-1 
+                            prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2
+                            prose-h1:text-lg prose-h2:text-base prose-h3:text-sm
+                            prose-p:my-2 prose-p:leading-relaxed
+                            prose-ul:my-2 prose-ul:list-disc prose-ul:pl-4
+                            prose-ol:my-2 prose-ol:list-decimal prose-ol:pl-4
+                            prose-li:my-1
+                            prose-strong:font-semibold prose-strong:text-foreground
+                            prose-em:italic
+                            prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
+                            prose-pre:bg-muted prose-pre:p-3 prose-pre:rounded-lg prose-pre:overflow-x-auto
+                            prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic
+                            prose-a:text-primary prose-a:underline">
+                            <Markdown
+                              components={{
+                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                h1: ({node, ...props}) => <h1 className="text-lg font-semibold mt-4 mb-2 first:mt-0" {...props} />,
+                                h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0" {...props} />,
+                                h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-3 mb-2 first:mt-0" {...props} />,
+                                ul: ({node, ...props}) => <ul className="list-disc pl-6 my-2 space-y-1" {...props} />,
+                                ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-2 space-y-1" {...props} />,
+                                li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                                code: ({node, className, children, ...props}: any) => {
+                                  const isInline = !className?.includes('language-');
+                                  return isInline 
+                                    ? <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>
+                                    : <code className="block bg-muted p-3 rounded-lg overflow-x-auto text-sm font-mono" {...props}>{children}</code>;
+                                },
+                                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary pl-4 italic my-2 text-muted-foreground" {...props} />,
+                                strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
+                                em: ({node, ...props}) => <em className="italic" {...props} />,
+                              }}
+                            >
+                              {message.content}
+                            </Markdown>
+                          </div>
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+                        )}
                        {message.role === 'assistant' && message.ai_model && (
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
