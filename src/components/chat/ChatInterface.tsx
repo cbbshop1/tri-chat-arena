@@ -103,8 +103,7 @@ export default function ChatInterface() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const updateIntervalRef = useRef<number | null>(null);
-  const pendingUpdateRef = useRef<string | null>(null);
+  const lastUpdateTimeRef = useRef<number>(0);
   
   const [isAtBottom, setIsAtBottom] = useState(true);
   const { toast } = useToast();
@@ -457,10 +456,10 @@ export default function ChatInterface() {
     
     if (isImageRequest && ai === 'chatgpt') {
       try {
-        // Generate the image
+        console.log('[ChatInterface] Attempting image generation for prompt:', message);
         const imageDataUrl = await generateImage(message);
+        console.log('[ChatInterface] Image generated successfully');
         
-        // Create a multimodal response with the image
         const tempMessageId = `temp-${Date.now()}`;
         const responseText = `I've generated an image based on your request:\n\n![Generated Image](${imageDataUrl})`;
         
@@ -472,10 +471,20 @@ export default function ChatInterface() {
           created_at: new Date().toISOString()
         }]);
         
+        toast({
+          title: "Image Generated",
+          description: "Your image has been created successfully",
+        });
+        
         return { reply: responseText, tempId: tempMessageId };
       } catch (error) {
-        console.error('Image generation failed:', error);
-        // Fall through to regular text response if image generation fails
+        console.error('[ChatInterface] Image generation FAILED:', error);
+        toast({
+          title: "Image Generation Failed",
+          description: error instanceof Error ? error.message : "Unknown error occurred. Check console for details.",
+          variant: "destructive"
+        });
+        // Fall through to regular text response
       }
     }
     
@@ -554,24 +563,15 @@ export default function ChatInterface() {
               if (content) {
                 fullResponse += content;
                 
-                // Debounce updates - accumulate changes
-                pendingUpdateRef.current = fullResponse;
-                
-                // Set up requestAnimationFrame loop to batch updates smoothly
-                if (!updateIntervalRef.current) {
-                  const updateLoop = () => {
-                    if (pendingUpdateRef.current) {
-                      const content = pendingUpdateRef.current;
-                      setMessages(prev => prev.map(msg =>
-                        msg.id === tempMessageId
-                          ? { ...msg, content }
-                          : msg
-                      ));
-                      pendingUpdateRef.current = null;
-                    }
-                    updateIntervalRef.current = requestAnimationFrame(updateLoop);
-                  };
-                  updateIntervalRef.current = requestAnimationFrame(updateLoop);
+                // Throttle updates to 250ms intervals
+                const now = Date.now();
+                if (now - lastUpdateTimeRef.current >= 250) {
+                  lastUpdateTimeRef.current = now;
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === tempMessageId
+                      ? { ...msg, content: fullResponse }
+                      : msg
+                  ));
                 }
               }
             } catch (e) {
@@ -583,11 +583,6 @@ export default function ChatInterface() {
     } finally {
       reader.releaseLock();
       
-      // Clear the update animation frame
-      if (updateIntervalRef.current) {
-        cancelAnimationFrame(updateIntervalRef.current);
-        updateIntervalRef.current = null;
-      }
       // Final update with complete response
       setMessages(prev => prev.map(msg =>
         msg.id === tempMessageId
@@ -656,24 +651,15 @@ export default function ChatInterface() {
                 const delta = parsed.delta?.text || '';
                 fullResponse += delta;
                 
-                // Debounce updates - accumulate changes
-                pendingUpdateRef.current = fullResponse;
-                
-                // Set up requestAnimationFrame loop to batch updates smoothly
-                if (!updateIntervalRef.current) {
-                  const updateLoop = () => {
-                    if (pendingUpdateRef.current) {
-                      const content = pendingUpdateRef.current;
-                      setMessages(prev => prev.map(msg =>
-                        msg.id === tempMessageId
-                          ? { ...msg, content }
-                          : msg
-                      ));
-                      pendingUpdateRef.current = null;
-                    }
-                    updateIntervalRef.current = requestAnimationFrame(updateLoop);
-                  };
-                  updateIntervalRef.current = requestAnimationFrame(updateLoop);
+                // Throttle updates to 250ms intervals
+                const now = Date.now();
+                if (now - lastUpdateTimeRef.current >= 250) {
+                  lastUpdateTimeRef.current = now;
+                  setMessages(prev => prev.map(msg =>
+                    msg.id === tempMessageId
+                      ? { ...msg, content: fullResponse }
+                      : msg
+                  ));
                 }
               }
             } catch (e) {
@@ -686,11 +672,6 @@ export default function ChatInterface() {
       console.error('Claude streaming error:', error);
       throw error;
     } finally {
-      // Clear the update animation frame
-      if (updateIntervalRef.current) {
-        cancelAnimationFrame(updateIntervalRef.current);
-        updateIntervalRef.current = null;
-      }
       // Final update with complete response
       setMessages(prev => prev.map(msg =>
         msg.id === tempMessageId
@@ -789,24 +770,15 @@ export default function ChatInterface() {
               const delta = parsed.choices?.[0]?.delta?.content || '';
               fullResponse += delta;
               
-              // Debounce updates - accumulate changes
-              pendingUpdateRef.current = fullResponse;
-              
-              // Set up requestAnimationFrame loop to batch updates smoothly
-              if (!updateIntervalRef.current) {
-                const updateLoop = () => {
-                  if (pendingUpdateRef.current) {
-                    const content = pendingUpdateRef.current;
-                    setMessages(prev => prev.map(msg =>
-                      msg.id === tempMessageId
-                        ? { ...msg, content }
-                        : msg
-                    ));
-                    pendingUpdateRef.current = null;
-                  }
-                  updateIntervalRef.current = requestAnimationFrame(updateLoop);
-                };
-                updateIntervalRef.current = requestAnimationFrame(updateLoop);
+              // Throttle updates to 250ms intervals
+              const now = Date.now();
+              if (now - lastUpdateTimeRef.current >= 250) {
+                lastUpdateTimeRef.current = now;
+                setMessages(prev => prev.map(msg =>
+                  msg.id === tempMessageId
+                    ? { ...msg, content: fullResponse }
+                    : msg
+                ));
               }
             } catch (e) {
               // Skip invalid JSON
@@ -818,11 +790,6 @@ export default function ChatInterface() {
       console.error('OpenAI streaming error:', error);
       throw error;
     } finally {
-      // Clear the update animation frame
-      if (updateIntervalRef.current) {
-        cancelAnimationFrame(updateIntervalRef.current);
-        updateIntervalRef.current = null;
-      }
       // Final update with complete response
       setMessages(prev => prev.map(msg =>
         msg.id === tempMessageId
