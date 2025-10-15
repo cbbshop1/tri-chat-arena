@@ -90,7 +90,6 @@ export default function ChatInterface() {
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
@@ -128,32 +127,22 @@ export default function ChatInterface() {
     }
   }, [currentSessionId]);
 
-  // Auto-scroll to bottom (only when user hasn't scrolled up)
-  useEffect(() => {
-    if (shouldAutoScroll && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, shouldAutoScroll]);
-
-  // Detect user scroll position to enable/disable auto-scroll
+  // Auto-scroll to bottom (only when user is already near bottom)
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (!container) return;
+    if (!container || !messagesEndRef.current) return;
 
-    const handleScroll = () => {
-      const scrollTop = container.scrollTop;
-      const scrollHeight = container.scrollHeight;
-      const clientHeight = container.clientHeight;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      
-      // If user is within 100px of bottom, enable auto-scroll
-      // Otherwise, they're reading earlier content - don't interrupt
-      setShouldAutoScroll(distanceFromBottom < 100);
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [currentSessionId]);
+    // Check current scroll position synchronously
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // Only auto-scroll if user is within 100px of bottom
+    if (distanceFromBottom < 100) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   // Auto-resize textarea
   useEffect(() => {
