@@ -103,8 +103,8 @@ export default function ChatInterface() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingUpdateRef = useRef<string>('');
+  const updateIntervalRef = useRef<number | null>(null);
+  const pendingUpdateRef = useRef<string | null>(null);
   
   const [isAtBottom, setIsAtBottom] = useState(true);
   const { toast } = useToast();
@@ -449,7 +449,10 @@ export default function ChatInterface() {
     const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
     
     // Check if user is requesting image generation
-    const imageKeywords = ['generate image', 'create image', 'draw', 'make image', 'picture of', 'show me'];
+    const imageKeywords = [
+      'generate image', 'create image', 'draw', 'make image', 'picture of', 'show me',
+      'render', 'paint', 'illustrate', 'visualize', 'design', 'produce image'
+    ];
     const isImageRequest = imageKeywords.some(keyword => message.toLowerCase().includes(keyword));
     
     if (isImageRequest && ai === 'chatgpt') {
@@ -554,9 +557,9 @@ export default function ChatInterface() {
                 // Debounce updates - accumulate changes
                 pendingUpdateRef.current = fullResponse;
                 
-                // Set up interval to batch updates every 100ms
+                // Set up requestAnimationFrame loop to batch updates smoothly
                 if (!updateIntervalRef.current) {
-                  updateIntervalRef.current = setInterval(() => {
+                  const updateLoop = () => {
                     if (pendingUpdateRef.current) {
                       const content = pendingUpdateRef.current;
                       setMessages(prev => prev.map(msg =>
@@ -564,8 +567,11 @@ export default function ChatInterface() {
                           ? { ...msg, content }
                           : msg
                       ));
+                      pendingUpdateRef.current = null;
                     }
-                  }, 100);
+                    updateIntervalRef.current = requestAnimationFrame(updateLoop);
+                  };
+                  updateIntervalRef.current = requestAnimationFrame(updateLoop);
                 }
               }
             } catch (e) {
@@ -577,9 +583,9 @@ export default function ChatInterface() {
     } finally {
       reader.releaseLock();
       
-      // Clear the update interval
+      // Clear the update animation frame
       if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
+        cancelAnimationFrame(updateIntervalRef.current);
         updateIntervalRef.current = null;
       }
       // Final update with complete response
@@ -653,9 +659,9 @@ export default function ChatInterface() {
                 // Debounce updates - accumulate changes
                 pendingUpdateRef.current = fullResponse;
                 
-                // Set up interval to batch updates every 100ms
+                // Set up requestAnimationFrame loop to batch updates smoothly
                 if (!updateIntervalRef.current) {
-                  updateIntervalRef.current = setInterval(() => {
+                  const updateLoop = () => {
                     if (pendingUpdateRef.current) {
                       const content = pendingUpdateRef.current;
                       setMessages(prev => prev.map(msg =>
@@ -663,8 +669,11 @@ export default function ChatInterface() {
                           ? { ...msg, content }
                           : msg
                       ));
+                      pendingUpdateRef.current = null;
                     }
-                  }, 100);
+                    updateIntervalRef.current = requestAnimationFrame(updateLoop);
+                  };
+                  updateIntervalRef.current = requestAnimationFrame(updateLoop);
                 }
               }
             } catch (e) {
@@ -677,9 +686,9 @@ export default function ChatInterface() {
       console.error('Claude streaming error:', error);
       throw error;
     } finally {
-      // Clear the update interval
+      // Clear the update animation frame
       if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
+        cancelAnimationFrame(updateIntervalRef.current);
         updateIntervalRef.current = null;
       }
       // Final update with complete response
@@ -783,9 +792,9 @@ export default function ChatInterface() {
               // Debounce updates - accumulate changes
               pendingUpdateRef.current = fullResponse;
               
-              // Set up interval to batch updates every 100ms
+              // Set up requestAnimationFrame loop to batch updates smoothly
               if (!updateIntervalRef.current) {
-                updateIntervalRef.current = setInterval(() => {
+                const updateLoop = () => {
                   if (pendingUpdateRef.current) {
                     const content = pendingUpdateRef.current;
                     setMessages(prev => prev.map(msg =>
@@ -793,8 +802,11 @@ export default function ChatInterface() {
                         ? { ...msg, content }
                         : msg
                     ));
+                    pendingUpdateRef.current = null;
                   }
-                }, 100);
+                  updateIntervalRef.current = requestAnimationFrame(updateLoop);
+                };
+                updateIntervalRef.current = requestAnimationFrame(updateLoop);
               }
             } catch (e) {
               // Skip invalid JSON
@@ -806,9 +818,9 @@ export default function ChatInterface() {
       console.error('OpenAI streaming error:', error);
       throw error;
     } finally {
-      // Clear the update interval
+      // Clear the update animation frame
       if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
+        cancelAnimationFrame(updateIntervalRef.current);
         updateIntervalRef.current = null;
       }
       // Final update with complete response
