@@ -70,16 +70,11 @@ serve(async (req) => {
     }
 
     const imageBuffer = await imageResponse.arrayBuffer();
-    const uint8Array = new Uint8Array(imageBuffer);
+    const bytes = new Uint8Array(imageBuffer);
     
-    // Convert to base64 in chunks to avoid stack overflow
-    let binaryString = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.slice(i, i + chunkSize);
-      binaryString += String.fromCharCode(...chunk);
-    }
-    const base64 = btoa(binaryString);
+    // Convert to base64 safely without stack overflow
+    const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+    const base64 = btoa(binString);
     const imageData = base64;
 
     return new Response(JSON.stringify({ 
