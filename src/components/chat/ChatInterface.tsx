@@ -89,6 +89,8 @@ export default function ChatInterface() {
   const [attachedLedgerEntries, setAttachedLedgerEntries] = useState<LedgerEntry[]>([]);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
@@ -126,10 +128,32 @@ export default function ChatInterface() {
     }
   }, [currentSessionId]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom (only when user hasn't scrolled up)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (shouldAutoScroll && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, shouldAutoScroll]);
+
+  // Detect user scroll position to enable/disable auto-scroll
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      
+      // If user is within 100px of bottom, enable auto-scroll
+      // Otherwise, they're reading earlier content - don't interrupt
+      setShouldAutoScroll(distanceFromBottom < 100);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [currentSessionId]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -1264,7 +1288,7 @@ export default function ChatInterface() {
               </div>
             </div>
           ) : (
-            <div className="space-y-4 max-w-4xl mx-auto">
+            <div ref={messagesContainerRef} className="space-y-4 max-w-4xl mx-auto overflow-y-auto h-full">
               {messages.map((message) => (
                 <div
                   key={message.id}
