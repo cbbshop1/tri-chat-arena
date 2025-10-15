@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,15 +71,40 @@ serve(async (req) => {
     }
 
     const imageBuffer = await imageResponse.arrayBuffer();
-    const bytes = new Uint8Array(imageBuffer);
+
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    // Convert to base64 safely without stack overflow
-    const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-    const base64 = btoa(binString);
-    const imageData = base64;
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase configuration missing');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Upload to storage
+    const filename = `generated-${Date.now()}-${crypto.randomUUID()}.png`;
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('chat-files')
+      .upload(filename, imageBuffer, {
+        contentType: 'image/png',
+        cacheControl: '3600'
+      });
+
+    if (uploadError) {
+      console.error('[GENERATE-IMAGE] Storage upload error:', uploadError);
+      throw new Error(`Failed to upload image: ${uploadError.message}`);
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('chat-files')
+      .getPublicUrl(filename);
+
+    console.log('[GENERATE-IMAGE] Image stored successfully at:', publicUrl);
 
     return new Response(JSON.stringify({ 
-      image: `data:image/png;base64,${imageData}`,
+      image: publicUrl,
       prompt 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
