@@ -88,8 +88,10 @@ export default function ChatInterface() {
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
   const [attachedLedgerEntries, setAttachedLedgerEntries] = useState<LedgerEntry[]>([]);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
   const { subscribed } = useSubscription();
@@ -519,8 +521,36 @@ export default function ChatInterface() {
     return { response: fullResponse, tempId: tempMessageId };
   };
 
+  const convertImageToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const streamOpenAI = async (message: string, conversationHistory: any[]): Promise<{ response: string; tempId: string }> => {
     const { data: { session } } = await supabase.auth.getSession();
+    
+    // Build multimodal message if images are attached
+    let messagePayload: any = message;
+    if (selectedImages.length > 0) {
+      const imagePromises = selectedImages.map(img => convertImageToBase64(img));
+      const base64Images = await Promise.all(imagePromises);
+      
+      messagePayload = {
+        role: 'user',
+        content: [
+          { type: 'text', text: message },
+          ...base64Images.map(url => ({
+            type: 'image_url',
+            image_url: { url, detail: 'high' }
+          }))
+        ]
+      };
+    }
+    
     const response = await fetch(
       `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/chat-openai`,
       {
@@ -530,7 +560,7 @@ export default function ChatInterface() {
           'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          message,
+          message: messagePayload,
           conversation_history: conversationHistory,
           sessionId: currentSessionId
         }),
@@ -1045,6 +1075,9 @@ export default function ChatInterface() {
         const title = message.length > 30 ? message.substring(0, 30) + "..." : message;
         await updateSessionTitle(currentSessionId, title);
       }
+      
+      // Clear image attachments after sending
+      setSelectedImages([]);
 
       if (selectedAI === "all") {
         // Call all AIs in parallel
@@ -1523,6 +1556,24 @@ export default function ChatInterface() {
                       </Button>
                     </Badge>
                   ))}
+                  
+                  {selectedImages.map((file, idx) => (
+                    <div key={idx} className="relative inline-block">
+                      <img 
+                        src={URL.createObjectURL(file)} 
+                        alt={file.name}
+                        className="h-16 w-16 object-cover rounded border"
+                      />
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="absolute -top-2 -right-2 h-4 w-4 rounded-full p-0"
+                        onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
+                      >
+                        <X className="h-2 w-2" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
                 
                 {/* Show detached items that can be re-attached */}
@@ -1571,14 +1622,39 @@ export default function ChatInterface() {
                 accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
               />
               
+              <input
+                ref={imageInputRef}
+                type="file"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setSelectedImages(prev => [...prev, ...files]);
+                  e.target.value = '';
+                }}
+                className="hidden"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+              />
+              
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!currentSessionId}
                 className="shrink-0"
+                title="Attach file"
               >
                 <Paperclip className="w-4 h-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={!currentSessionId}
+                className="shrink-0"
+                title="Attach image for vision"
+              >
+                <span className="text-base">🖼️</span>
               </Button>
               
               <Textarea

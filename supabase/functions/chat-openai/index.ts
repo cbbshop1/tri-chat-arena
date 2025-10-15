@@ -22,6 +22,16 @@ serve(async (req) => {
 
     const { message, conversation_history = [], sessionId } = await req.json();
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    
+    // Handle multimodal messages (text + images)
+    let userMessage;
+    if (typeof message === 'string') {
+      // Simple text message
+      userMessage = { role: 'user', content: message };
+    } else {
+      // Multimodal message with images
+      userMessage = message;
+    }
 
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
@@ -118,9 +128,8 @@ serve(async (req) => {
         model: 'gpt-4.1-2025-04-14',
         messages: [
           ...conversation_history,
-          { role: 'user', content: message }
+          userMessage
         ],
-        temperature: 0.7,
         stream: true
       }),
     });
