@@ -238,14 +238,27 @@ export default function ChatInterface() {
       if (error) throw error;
       
       // Type-safe mapping to ensure role is correct type
-      const typedMessages: Message[] = (data || []).map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        role: msg.role as 'user' | 'assistant',
-        ai_model: msg.ai_model as SpecificAI | undefined,
-        target_ai: (msg as any).target_ai as SpecificAI | 'all' | undefined || 'all',
-        created_at: msg.created_at
-      }));
+      const typedMessages: Message[] = (data || []).map(msg => {
+        // Try to parse content if it's a JSON string (multimodal message)
+        let parsedContent: string | MultimodalContent = msg.content;
+        if (typeof msg.content === 'string' && msg.content.startsWith('{')) {
+          try {
+            parsedContent = JSON.parse(msg.content);
+          } catch (e) {
+            // If parsing fails, keep as string (plain text message)
+            parsedContent = msg.content;
+          }
+        }
+        
+        return {
+          id: msg.id,
+          content: parsedContent,
+          role: msg.role as 'user' | 'assistant',
+          ai_model: msg.ai_model as SpecificAI | undefined,
+          target_ai: (msg as any).target_ai as SpecificAI | 'all' | undefined || 'all',
+          created_at: msg.created_at
+        };
+      });
       
       setMessages(typedMessages);
     } catch (error) {
@@ -374,7 +387,7 @@ export default function ChatInterface() {
       })
       .map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
-        content: typeof msg.content === 'string' ? msg.content : msg.content.content.find(c => c.type === 'text')?.text || ''
+        content: extractContentParts(msg).text
       }));
   };
 
