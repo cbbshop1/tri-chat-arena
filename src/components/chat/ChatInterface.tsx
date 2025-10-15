@@ -1268,7 +1268,7 @@ export default function ChatInterface() {
             </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
+        <div className="flex-1 p-4 flex flex-col overflow-hidden">
           {!currentSessionId ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
@@ -1277,7 +1277,7 @@ export default function ChatInterface() {
               </div>
             </div>
           ) : (
-            <div ref={messagesContainerRef} className="space-y-4 max-w-4xl mx-auto overflow-y-auto h-full">
+            <div ref={messagesContainerRef} className="space-y-4 max-w-4xl mx-auto overflow-y-auto flex-1">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -1441,7 +1441,7 @@ export default function ChatInterface() {
               <div ref={messagesEndRef} />
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* Pin Prompt - Non-Blocking Docked Card */}
         {pinQueue.length > 0 && (
