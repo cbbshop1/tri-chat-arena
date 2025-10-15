@@ -28,9 +28,18 @@ interface ChatSession {
   updated_at: string;
 }
 
+interface MultimodalContent {
+  role: 'user' | 'assistant';
+  content: Array<{
+    type: 'text' | 'image_url';
+    text?: string;
+    image_url?: { url: string; detail?: string };
+  }>;
+}
+
 interface Message {
   id: string;
-  content: string;
+  content: string | MultimodalContent;
   role: 'user' | 'assistant';
   ai_model?: SpecificAI;
   target_ai?: SpecificAI | 'all';
@@ -98,6 +107,28 @@ export default function ChatInterface() {
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
   const { user, signOut } = useAuth();
 
+  // Helper to extract content parts from a message
+  const extractContentParts = (message: Message): { text: string; images: string[] } => {
+    if (typeof message.content === 'string') {
+      return { text: message.content, images: [] };
+    }
+    
+    if (typeof message.content === 'object' && 'content' in message.content) {
+      const textParts = message.content.content
+        .filter(part => part.type === 'text')
+        .map(part => part.text || '')
+        .join(' ');
+      
+      const images = message.content.content
+        .filter(part => part.type === 'image_url')
+        .map(part => part.image_url?.url || '');
+      
+      return { text: textParts, images };
+    }
+    
+    return { text: '', images: [] };
+  };
+
   // Load sessions on mount and check for pinned ledger entries
   useEffect(() => {
     loadSessions();
@@ -149,11 +180,12 @@ export default function ChatInterface() {
     if (messages.length === 0) return;
     
     const lastMessage = messages[messages.length - 1];
+    const { text: lastMessageText } = extractContentParts(lastMessage);
     
     // Only check messages that aren't already ledger-saved
-    if (!lastMessage.ledger && lastMessage.content.includes('📍')) {
-      const pinIndex = lastMessage.content.indexOf('📍');
-      const contentAfterPin = lastMessage.content.substring(pinIndex + 1, pinIndex + 151).trim();
+    if (!lastMessage.ledger && lastMessageText.includes('📍')) {
+      const pinIndex = lastMessageText.indexOf('📍');
+      const contentAfterPin = lastMessageText.substring(pinIndex + 1, pinIndex + 151).trim();
       
       if (contentAfterPin.length > 0) {
         // Auto-save user pins immediately
@@ -335,13 +367,14 @@ export default function ChatInterface() {
           return msg.ai_model === targetAI;
         } else {
           // For user messages, only include those intended for this AI or forwarded messages
+          const { text } = extractContentParts(msg);
           return msg.target_ai === targetAI || msg.target_ai === 'all' || 
-                 (msg.content && msg.content.includes('[Forwarded from'));
+                 (text && text.includes('[Forwarded from'));
         }
       })
       .map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content
+        content: typeof msg.content === 'string' ? msg.content : msg.content.content.find(c => c.type === 'text')?.text || ''
       }));
   };
 
@@ -535,6 +568,8 @@ export default function ChatInterface() {
     
     // Build multimodal message if images are attached
     let messagePayload: any = message;
+    let userMessageContent: string | MultimodalContent = message;
+    
     if (selectedImages.length > 0) {
       const imagePromises = selectedImages.map(img => convertImageToBase64(img));
       const base64Images = await Promise.all(imagePromises);
@@ -549,6 +584,8 @@ export default function ChatInterface() {
           }))
         ]
       };
+      
+      userMessageContent = messagePayload;
     }
     
     const response = await fetch(
@@ -1067,7 +1104,37 @@ export default function ChatInterface() {
 
       // Save user message with target AI information
       const targetAI = selectedAI === "all" ? "all" : selectedAI as SpecificAI;
-      await saveMessage(message, 'user', undefined, targetAI);
+      
+      // Build multimodal content for storage if images attached
+      let userMessageContent: string | MultimodalContent = message;
+      if (selectedImages.length > 0) {
+        const imagePromises = selectedImages.map(img => convertImageToBase64(img));
+        const base64Images = await Promise.all(imagePromises);
+        
+        userMessageContent = {
+          role: 'user',
+          content: [
+            { type: 'text' as const, text: message },
+            ...base64Images.map(url => ({
+              type: 'image_url' as const,
+              image_url: { url, detail: 'high' as const }
+            }))
+          ]
+        };
+      }
+      
+      // Save the message with proper content structure
+      const { data: savedMsg } = await supabase
+        .from('messages')
+        .insert({
+          session_id: currentSessionId,
+          content: typeof userMessageContent === 'string' ? userMessageContent : JSON.stringify(userMessageContent),
+          role: 'user',
+          target_ai: targetAI
+        })
+        .select()
+        .single();
+      
       await loadMessages(currentSessionId);
 
       // Update session title if it's the first message
@@ -1370,11 +1437,31 @@ export default function ChatInterface() {
                                 em: ({node, ...props}) => <em className="italic" {...props} />,
                               }}
                             >
-                              {message.content}
+                              {typeof message.content === 'string' ? message.content : extractContentParts(message).text}
                             </Markdown>
                           </div>
                         ) : (
-                          <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+                          (() => {
+                            const { text, images } = extractContentParts(message);
+                            return (
+                              <div className="flex-1 space-y-2">
+                                {images.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {images.map((url, idx) => (
+                                      <img 
+                                        key={idx}
+                                        src={url} 
+                                        alt={`Uploaded image ${idx + 1}`}
+                                        className="max-w-[200px] max-h-[200px] object-contain rounded-lg border border-border cursor-pointer hover:opacity-80 transition-opacity"
+                                        onClick={() => window.open(url, '_blank')}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="text-sm whitespace-pre-wrap">{text}</p>
+                              </div>
+                            );
+                          })()
                         )}
                        {message.role === 'assistant' && message.ai_model && (
                          <DropdownMenu>
@@ -1387,35 +1474,39 @@ export default function ChatInterface() {
                              {Object.entries(AI_CONFIGS)
                                .filter(([key]) => key !== 'all' && key !== message.ai_model)
                                .map(([key, config]) => (
+                                  <DropdownMenuItem
+                                    key={key}
+                                    onClick={() => {
+                                      const { text } = extractContentParts(message);
+                                      forwardMessage(text, message.ai_model!, key as SpecificAI);
+                                    }}
+                                    className="gap-2"
+                                  >
+                                    <span>{config.icon}</span>
+                                    Forward to {config.name}
+                                  </DropdownMenuItem>
+                               ))}
+                               {!message.ledger && (
                                  <DropdownMenuItem
-                                   key={key}
-                                   onClick={() => forwardMessage(message.content, message.ai_model!, key as SpecificAI)}
+                                   onClick={() => {
+                                     const { text } = extractContentParts(message);
+                                     const content = text.includes('📍') 
+                                       ? text.substring(text.indexOf('📍') + 1, text.indexOf('📍') + 151).trim()
+                                       : text.substring(0, 150);
+                                     
+                                     // Add to queue
+                                     setPinQueue(prev => {
+                                       const alreadyQueued = prev.some(p => p.messageId === message.id);
+                                       if (alreadyQueued) return prev;
+                                       
+                                       return [...prev, { messageId: message.id, content }];
+                                     });
+                                   }}
                                    className="gap-2"
                                  >
-                                   <span>{config.icon}</span>
-                                   Forward to {config.name}
+                                   📍 Save to Ledger
                                  </DropdownMenuItem>
-                               ))}
-                              {!message.ledger && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const content = message.content.includes('📍') 
-                                      ? message.content.substring(message.content.indexOf('📍') + 1, message.content.indexOf('📍') + 151).trim()
-                                      : message.content.substring(0, 150);
-                                    
-                                    // Add to queue
-                                    setPinQueue(prev => {
-                                      const alreadyQueued = prev.some(p => p.messageId === message.id);
-                                      if (alreadyQueued) return prev;
-                                      
-                                      return [...prev, { messageId: message.id, content }];
-                                    });
-                                  }}
-                                  className="gap-2"
-                                >
-                                  📍 Save to Ledger
-                                </DropdownMenuItem>
-                              )}
+                               )}
                            </DropdownMenuContent>
                          </DropdownMenu>
                        )}
