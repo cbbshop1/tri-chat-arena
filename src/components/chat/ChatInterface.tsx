@@ -1517,7 +1517,7 @@ export default function ChatInterface() {
             </div>
 
         {/* Messages */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 overflow-hidden">
           <ScrollArea className="h-full p-4" ref={scrollAreaRef} onScrollCapture={handleScroll}>
           {!currentSessionId ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
