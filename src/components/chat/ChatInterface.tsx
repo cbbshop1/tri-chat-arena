@@ -415,8 +415,6 @@ export default function ChatInterface() {
   };
 
   const generateImage = async (prompt: string): Promise<string> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
     try {
       const response = await fetch(
         `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/generate-image`,
@@ -424,7 +422,6 @@ export default function ChatInterface() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
           },
           body: JSON.stringify({ prompt }),
         }
