@@ -102,6 +102,11 @@ export default function ChatInterface() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingUpdateRef = useRef<string>('');
+  
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const { toast } = useToast();
   const { subscribed } = useSubscription();
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
@@ -127,6 +132,23 @@ export default function ChatInterface() {
     }
     
     return { text: '', images: [] };
+  };
+
+  // Scroll handling
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100;
+    setIsAtBottom(isNearBottom);
+  };
+
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+        setIsAtBottom(true);
+      }
+    }
   };
 
   // Load sessions on mount and check for pinned ledger entries
@@ -159,10 +181,12 @@ export default function ChatInterface() {
     }
   }, [currentSessionId]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom only if user is at bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (isAtBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isAtBottom]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -391,10 +415,66 @@ export default function ChatInterface() {
       }));
   };
 
+  const generateImage = async (prompt: string): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    try {
+      const response = await fetch(
+        `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/generate-image`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ prompt }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Image generation error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.image; // Returns base64 data URL
+    } catch (error) {
+      console.error('Error generating image:', error);
+      throw error;
+    }
+  };
+
   const callAI = async (ai: SpecificAI, message: string): Promise<string | { reply: string; tempId: string }> => {
     const conversationHistory = getConversationHistory(ai);
     const context = getContextForAI();
     const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
+    
+    // Check if user is requesting image generation
+    const imageKeywords = ['generate image', 'create image', 'draw', 'make image', 'picture of', 'show me'];
+    const isImageRequest = imageKeywords.some(keyword => message.toLowerCase().includes(keyword));
+    
+    if (isImageRequest && ai === 'chatgpt') {
+      try {
+        // Generate the image
+        const imageDataUrl = await generateImage(message);
+        
+        // Create a multimodal response with the image
+        const tempMessageId = `temp-${Date.now()}`;
+        const responseText = `I've generated an image based on your request:\n\n![Generated Image](${imageDataUrl})`;
+        
+        setMessages(prev => [...prev, {
+          id: tempMessageId,
+          content: responseText,
+          role: 'assistant',
+          ai_model: 'chatgpt',
+          created_at: new Date().toISOString()
+        }]);
+        
+        return { reply: responseText, tempId: tempMessageId };
+      } catch (error) {
+        console.error('Image generation failed:', error);
+        // Fall through to regular text response if image generation fails
+      }
+    }
     
     // Prepend context to the message if available
     const messageWithContext = context ? `${context}\n\nUser Message: ${message}` : message;
@@ -470,12 +550,23 @@ export default function ChatInterface() {
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullResponse += content;
-                // Update the message in real-time
-                setMessages(prev => prev.map(msg => 
-                  msg.id === tempMessageId 
-                    ? { ...msg, content: fullResponse }
-                    : msg
-                ));
+                
+                // Debounce updates - accumulate changes
+                pendingUpdateRef.current = fullResponse;
+                
+                // Set up interval to batch updates every 100ms
+                if (!updateIntervalRef.current) {
+                  updateIntervalRef.current = setInterval(() => {
+                    if (pendingUpdateRef.current) {
+                      const content = pendingUpdateRef.current;
+                      setMessages(prev => prev.map(msg =>
+                        msg.id === tempMessageId
+                          ? { ...msg, content }
+                          : msg
+                      ));
+                    }
+                  }, 100);
+                }
               }
             } catch (e) {
               // Skip malformed JSON
@@ -485,6 +576,18 @@ export default function ChatInterface() {
       }
     } finally {
       reader.releaseLock();
+      
+      // Clear the update interval
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+        updateIntervalRef.current = null;
+      }
+      // Final update with complete response
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempMessageId
+          ? { ...msg, content: fullResponse }
+          : msg
+      ));
     }
 
     // Return the full response and the temp ID so we can replace it with the real saved message
@@ -547,11 +650,22 @@ export default function ChatInterface() {
                 const delta = parsed.delta?.text || '';
                 fullResponse += delta;
                 
-                setMessages(prev => prev.map(msg =>
-                  msg.id === tempMessageId
-                    ? { ...msg, content: fullResponse }
-                    : msg
-                ));
+                // Debounce updates - accumulate changes
+                pendingUpdateRef.current = fullResponse;
+                
+                // Set up interval to batch updates every 100ms
+                if (!updateIntervalRef.current) {
+                  updateIntervalRef.current = setInterval(() => {
+                    if (pendingUpdateRef.current) {
+                      const content = pendingUpdateRef.current;
+                      setMessages(prev => prev.map(msg =>
+                        msg.id === tempMessageId
+                          ? { ...msg, content }
+                          : msg
+                      ));
+                    }
+                  }, 100);
+                }
               }
             } catch (e) {
               // Skip invalid JSON
@@ -562,6 +676,18 @@ export default function ChatInterface() {
     } catch (error) {
       console.error('Claude streaming error:', error);
       throw error;
+    } finally {
+      // Clear the update interval
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+        updateIntervalRef.current = null;
+      }
+      // Final update with complete response
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempMessageId
+          ? { ...msg, content: fullResponse }
+          : msg
+      ));
     }
 
     return { response: fullResponse, tempId: tempMessageId };
@@ -654,11 +780,22 @@ export default function ChatInterface() {
               const delta = parsed.choices?.[0]?.delta?.content || '';
               fullResponse += delta;
               
-              setMessages(prev => prev.map(msg =>
-                msg.id === tempMessageId
-                  ? { ...msg, content: fullResponse }
-                  : msg
-              ));
+              // Debounce updates - accumulate changes
+              pendingUpdateRef.current = fullResponse;
+              
+              // Set up interval to batch updates every 100ms
+              if (!updateIntervalRef.current) {
+                updateIntervalRef.current = setInterval(() => {
+                  if (pendingUpdateRef.current) {
+                    const content = pendingUpdateRef.current;
+                    setMessages(prev => prev.map(msg =>
+                      msg.id === tempMessageId
+                        ? { ...msg, content }
+                        : msg
+                    ));
+                  }
+                }, 100);
+              }
             } catch (e) {
               // Skip invalid JSON
             }
@@ -668,6 +805,18 @@ export default function ChatInterface() {
     } catch (error) {
       console.error('OpenAI streaming error:', error);
       throw error;
+    } finally {
+      // Clear the update interval
+      if (updateIntervalRef.current) {
+        clearInterval(updateIntervalRef.current);
+        updateIntervalRef.current = null;
+      }
+      // Final update with complete response
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempMessageId
+          ? { ...msg, content: fullResponse }
+          : msg
+      ));
     }
 
     return { response: fullResponse, tempId: tempMessageId };
@@ -1368,7 +1517,8 @@ export default function ChatInterface() {
             </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
+        <div className="relative flex-1">
+          <ScrollArea className="h-full p-4" ref={scrollAreaRef} onScrollCapture={handleScroll}>
           {!currentSessionId ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
@@ -1565,7 +1715,20 @@ export default function ChatInterface() {
               <div ref={messagesEndRef} />
             </div>
           )}
-        </ScrollArea>
+          </ScrollArea>
+          
+          {/* Scroll to bottom button */}
+          {!isAtBottom && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="absolute bottom-4 right-4 shadow-lg bg-card/90 backdrop-blur-sm"
+              onClick={scrollToBottom}
+            >
+              New messages ↓
+            </Button>
+          )}
+        </div>
 
         {/* Pin Prompt - Non-Blocking Docked Card */}
         {pinQueue.length > 0 && (
