@@ -479,12 +479,29 @@ export default function ChatInterface() {
         return { reply: responseText, tempId: tempMessageId };
       } catch (error) {
         console.error('[ChatInterface] Image generation FAILED:', error);
+        
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        
         toast({
           title: "Image Generation Failed",
-          description: error instanceof Error ? error.message : "Unknown error occurred. Check console for details.",
+          description: errorMessage,
           variant: "destructive"
         });
-        // Fall through to regular text response
+        
+        // Create an error message instead of falling through to text chat
+        const tempMessageId = `temp-${Date.now()}`;
+        const errorText = `❌ Image generation failed: ${errorMessage}\n\nPlease check that your OpenAI API key is configured correctly in Supabase.`;
+        
+        setMessages(prev => [...prev, {
+          id: tempMessageId,
+          content: errorText,
+          role: 'assistant',
+          ai_model: 'chatgpt',
+          created_at: new Date().toISOString()
+        }]);
+        
+        // STOP HERE - don't fall through to text chat
+        return { reply: errorText, tempId: tempMessageId };
       }
     }
     
