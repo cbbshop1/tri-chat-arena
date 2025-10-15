@@ -33,11 +33,7 @@ export const useUsageLimit = () => {
       if (error) throw error;
       setDailyUsage(data || 0);
     } catch (error) {
-      console.error('Error checking daily usage:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        details: error
-      });
+      console.error('Error checking daily usage:', error);
       setDailyUsage(0);
     } finally {
       setLoading(false);
@@ -62,11 +58,7 @@ export const useUsageLimit = () => {
       
       return newCount <= DAILY_MESSAGE_LIMIT;
     } catch (error) {
-      console.error('Error incrementing usage:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        details: error
-      });
+      console.error('Error incrementing usage:', error);
       return false;
     }
   };
@@ -82,10 +74,7 @@ export const useUsageLimit = () => {
   };
 
   useEffect(() => {
-    // Only check usage if we have a user or if user is explicitly null (not loading)
-    if (user !== undefined) {
-      checkDailyUsage();
-    }
+    checkDailyUsage();
   }, [user, subscribed]);
 
   return {

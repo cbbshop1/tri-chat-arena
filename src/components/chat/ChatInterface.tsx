@@ -28,18 +28,9 @@ interface ChatSession {
   updated_at: string;
 }
 
-interface MultimodalContent {
-  role: 'user' | 'assistant';
-  content: Array<{
-    type: 'text' | 'image_url';
-    text?: string;
-    image_url?: { url: string; detail?: string };
-  }>;
-}
-
 interface Message {
   id: string;
-  content: string | MultimodalContent;
+  content: string;
   role: 'user' | 'assistant';
   ai_model?: SpecificAI;
   target_ai?: SpecificAI | 'all';
@@ -97,58 +88,13 @@ export default function ChatInterface() {
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
   const [attachedLedgerEntries, setAttachedLedgerEntries] = useState<LedgerEntry[]>([]);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const lastUpdateTimeRef = useRef<number>(0);
-  
-  const [isAtBottom, setIsAtBottom] = useState(true);
   const { toast } = useToast();
   const { subscribed } = useSubscription();
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
   const { user, signOut } = useAuth();
-
-  // Helper to extract content parts from a message
-  const extractContentParts = (message: Message): { text: string; images: string[] } => {
-    if (typeof message.content === 'string') {
-      return { text: message.content, images: [] };
-    }
-    
-    if (typeof message.content === 'object' && 'content' in message.content) {
-      const textParts = message.content.content
-        .filter(part => part.type === 'text')
-        .map(part => part.text || '')
-        .join(' ');
-      
-      const images = message.content.content
-        .filter(part => part.type === 'image_url')
-        .map(part => part.image_url?.url || '');
-      
-      return { text: textParts, images };
-    }
-    
-    return { text: '', images: [] };
-  };
-
-  // Scroll handling
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100;
-    setIsAtBottom(isNearBottom);
-  };
-
-  const scrollToBottom = () => {
-    if (scrollAreaRef.current) {
-      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
-        setIsAtBottom(true);
-      }
-    }
-  };
 
   // Load sessions on mount and check for pinned ledger entries
   useEffect(() => {
@@ -180,12 +126,10 @@ export default function ChatInterface() {
     }
   }, [currentSessionId]);
 
-  // Auto-scroll to bottom only if user is at bottom
+  // Auto-scroll to bottom
   useEffect(() => {
-    if (isAtBottom) {
-      scrollToBottom();
-    }
-  }, [messages, isAtBottom]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -203,12 +147,11 @@ export default function ChatInterface() {
     if (messages.length === 0) return;
     
     const lastMessage = messages[messages.length - 1];
-    const { text: lastMessageText } = extractContentParts(lastMessage);
     
     // Only check messages that aren't already ledger-saved
-    if (!lastMessage.ledger && lastMessageText.includes('📍')) {
-      const pinIndex = lastMessageText.indexOf('📍');
-      const contentAfterPin = lastMessageText.substring(pinIndex + 1, pinIndex + 151).trim();
+    if (!lastMessage.ledger && lastMessage.content.includes('📍')) {
+      const pinIndex = lastMessage.content.indexOf('📍');
+      const contentAfterPin = lastMessage.content.substring(pinIndex + 1, pinIndex + 151).trim();
       
       if (contentAfterPin.length > 0) {
         // Auto-save user pins immediately
@@ -261,27 +204,14 @@ export default function ChatInterface() {
       if (error) throw error;
       
       // Type-safe mapping to ensure role is correct type
-      const typedMessages: Message[] = (data || []).map(msg => {
-        // Try to parse content if it's a JSON string (multimodal message)
-        let parsedContent: string | MultimodalContent = msg.content;
-        if (typeof msg.content === 'string' && msg.content.startsWith('{')) {
-          try {
-            parsedContent = JSON.parse(msg.content);
-          } catch (e) {
-            // If parsing fails, keep as string (plain text message)
-            parsedContent = msg.content;
-          }
-        }
-        
-        return {
-          id: msg.id,
-          content: parsedContent,
-          role: msg.role as 'user' | 'assistant',
-          ai_model: msg.ai_model as SpecificAI | undefined,
-          target_ai: (msg as any).target_ai as SpecificAI | 'all' | undefined || 'all',
-          created_at: msg.created_at
-        };
-      });
+      const typedMessages: Message[] = (data || []).map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        role: msg.role as 'user' | 'assistant',
+        ai_model: msg.ai_model as SpecificAI | undefined,
+        target_ai: (msg as any).target_ai as SpecificAI | 'all' | undefined || 'all',
+        created_at: msg.created_at
+      }));
       
       setMessages(typedMessages);
     } catch (error) {
@@ -403,104 +333,20 @@ export default function ChatInterface() {
           return msg.ai_model === targetAI;
         } else {
           // For user messages, only include those intended for this AI or forwarded messages
-          const { text } = extractContentParts(msg);
           return msg.target_ai === targetAI || msg.target_ai === 'all' || 
-                 (text && text.includes('[Forwarded from'));
+                 (msg.content && msg.content.includes('[Forwarded from'));
         }
       })
       .map(msg => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
-        content: extractContentParts(msg).text
+        content: msg.content
       }));
-  };
-
-  const generateImage = async (prompt: string): Promise<string> => {
-    try {
-      const response = await fetch(
-        `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/generate-image`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ prompt }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Image generation error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.image; // Returns base64 data URL
-    } catch (error) {
-      console.error('Error generating image:', error);
-      throw error;
-    }
   };
 
   const callAI = async (ai: SpecificAI, message: string): Promise<string | { reply: string; tempId: string }> => {
     const conversationHistory = getConversationHistory(ai);
     const context = getContextForAI();
     const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
-    
-    // Check if user is requesting image generation
-    const imageKeywords = [
-      'generate image', 'create image', 'draw', 'make image', 'picture of', 'show me',
-      'render', 'paint', 'illustrate', 'visualize', 'design', 'produce image'
-    ];
-    const isImageRequest = imageKeywords.some(keyword => message.toLowerCase().includes(keyword));
-    
-    if (isImageRequest && ai === 'chatgpt') {
-      try {
-        console.log('[ChatInterface] Attempting image generation for prompt:', message);
-        const imageDataUrl = await generateImage(message);
-        console.log('[ChatInterface] Image generated successfully');
-        
-        const tempMessageId = `temp-${Date.now()}`;
-        const responseText = `I've generated an image based on your request:\n\n![Generated Image](${imageDataUrl})`;
-        
-        setMessages(prev => [...prev, {
-          id: tempMessageId,
-          content: responseText,
-          role: 'assistant',
-          ai_model: 'chatgpt',
-          created_at: new Date().toISOString()
-        }]);
-        
-        toast({
-          title: "Image Generated",
-          description: "Your image has been created successfully",
-        });
-        
-        return { reply: responseText, tempId: tempMessageId };
-      } catch (error) {
-        console.error('[ChatInterface] Image generation FAILED:', error);
-        
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        
-        toast({
-          title: "Image Generation Failed",
-          description: errorMessage,
-          variant: "destructive"
-        });
-        
-        // Create an error message instead of falling through to text chat
-        const tempMessageId = `temp-${Date.now()}`;
-        const errorText = `❌ Image generation failed: ${errorMessage}\n\nPlease check that your OpenAI API key is configured correctly in Supabase.`;
-        
-        setMessages(prev => [...prev, {
-          id: tempMessageId,
-          content: errorText,
-          role: 'assistant',
-          ai_model: 'chatgpt',
-          created_at: new Date().toISOString()
-        }]);
-        
-        // STOP HERE - don't fall through to text chat
-        return { reply: errorText, tempId: tempMessageId };
-      }
-    }
     
     // Prepend context to the message if available
     const messageWithContext = context ? `${context}\n\nUser Message: ${message}` : message;
@@ -576,17 +422,12 @@ export default function ChatInterface() {
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullResponse += content;
-                
-                // Throttle updates to 250ms intervals
-                const now = Date.now();
-                if (now - lastUpdateTimeRef.current >= 250) {
-                  lastUpdateTimeRef.current = now;
-                  setMessages(prev => prev.map(msg =>
-                    msg.id === tempMessageId
-                      ? { ...msg, content: fullResponse }
-                      : msg
-                  ));
-                }
+                // Update the message in real-time
+                setMessages(prev => prev.map(msg => 
+                  msg.id === tempMessageId 
+                    ? { ...msg, content: fullResponse }
+                    : msg
+                ));
               }
             } catch (e) {
               // Skip malformed JSON
@@ -596,13 +437,6 @@ export default function ChatInterface() {
       }
     } finally {
       reader.releaseLock();
-      
-      // Final update with complete response
-      setMessages(prev => prev.map(msg =>
-        msg.id === tempMessageId
-          ? { ...msg, content: fullResponse }
-          : msg
-      ));
     }
 
     // Return the full response and the temp ID so we can replace it with the real saved message
@@ -665,16 +499,11 @@ export default function ChatInterface() {
                 const delta = parsed.delta?.text || '';
                 fullResponse += delta;
                 
-                // Throttle updates to 250ms intervals
-                const now = Date.now();
-                if (now - lastUpdateTimeRef.current >= 250) {
-                  lastUpdateTimeRef.current = now;
-                  setMessages(prev => prev.map(msg =>
-                    msg.id === tempMessageId
-                      ? { ...msg, content: fullResponse }
-                      : msg
-                  ));
-                }
+                setMessages(prev => prev.map(msg =>
+                  msg.id === tempMessageId
+                    ? { ...msg, content: fullResponse }
+                    : msg
+                ));
               }
             } catch (e) {
               // Skip invalid JSON
@@ -685,52 +514,13 @@ export default function ChatInterface() {
     } catch (error) {
       console.error('Claude streaming error:', error);
       throw error;
-    } finally {
-      // Final update with complete response
-      setMessages(prev => prev.map(msg =>
-        msg.id === tempMessageId
-          ? { ...msg, content: fullResponse }
-          : msg
-      ));
     }
 
     return { response: fullResponse, tempId: tempMessageId };
   };
 
-  const convertImageToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   const streamOpenAI = async (message: string, conversationHistory: any[]): Promise<{ response: string; tempId: string }> => {
     const { data: { session } } = await supabase.auth.getSession();
-    
-    // Build multimodal message if images are attached
-    let messagePayload: any = message;
-    let userMessageContent: string | MultimodalContent = message;
-    
-    if (selectedImages.length > 0) {
-      const imagePromises = selectedImages.map(img => convertImageToBase64(img));
-      const base64Images = await Promise.all(imagePromises);
-      
-      messagePayload = {
-        role: 'user',
-        content: [
-          { type: 'text', text: message },
-          ...base64Images.map(url => ({
-            type: 'image_url',
-            image_url: { url, detail: 'high' }
-          }))
-        ]
-      };
-      
-      userMessageContent = messagePayload;
-    }
-    
     const response = await fetch(
       `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/chat-openai`,
       {
@@ -740,7 +530,7 @@ export default function ChatInterface() {
           'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          message: messagePayload,
+          message,
           conversation_history: conversationHistory,
           sessionId: currentSessionId
         }),
@@ -784,16 +574,11 @@ export default function ChatInterface() {
               const delta = parsed.choices?.[0]?.delta?.content || '';
               fullResponse += delta;
               
-              // Throttle updates to 250ms intervals
-              const now = Date.now();
-              if (now - lastUpdateTimeRef.current >= 250) {
-                lastUpdateTimeRef.current = now;
-                setMessages(prev => prev.map(msg =>
-                  msg.id === tempMessageId
-                    ? { ...msg, content: fullResponse }
-                    : msg
-                ));
-              }
+              setMessages(prev => prev.map(msg =>
+                msg.id === tempMessageId
+                  ? { ...msg, content: fullResponse }
+                  : msg
+              ));
             } catch (e) {
               // Skip invalid JSON
             }
@@ -803,13 +588,6 @@ export default function ChatInterface() {
     } catch (error) {
       console.error('OpenAI streaming error:', error);
       throw error;
-    } finally {
-      // Final update with complete response
-      setMessages(prev => prev.map(msg =>
-        msg.id === tempMessageId
-          ? { ...msg, content: fullResponse }
-          : msg
-      ));
     }
 
     return { response: fullResponse, tempId: tempMessageId };
@@ -1259,37 +1037,7 @@ export default function ChatInterface() {
 
       // Save user message with target AI information
       const targetAI = selectedAI === "all" ? "all" : selectedAI as SpecificAI;
-      
-      // Build multimodal content for storage if images attached
-      let userMessageContent: string | MultimodalContent = message;
-      if (selectedImages.length > 0) {
-        const imagePromises = selectedImages.map(img => convertImageToBase64(img));
-        const base64Images = await Promise.all(imagePromises);
-        
-        userMessageContent = {
-          role: 'user',
-          content: [
-            { type: 'text' as const, text: message },
-            ...base64Images.map(url => ({
-              type: 'image_url' as const,
-              image_url: { url, detail: 'high' as const }
-            }))
-          ]
-        };
-      }
-      
-      // Save the message with proper content structure
-      const { data: savedMsg } = await supabase
-        .from('messages')
-        .insert({
-          session_id: currentSessionId,
-          content: typeof userMessageContent === 'string' ? userMessageContent : JSON.stringify(userMessageContent),
-          role: 'user',
-          target_ai: targetAI
-        })
-        .select()
-        .single();
-      
+      await saveMessage(message, 'user', undefined, targetAI);
       await loadMessages(currentSessionId);
 
       // Update session title if it's the first message
@@ -1297,9 +1045,6 @@ export default function ChatInterface() {
         const title = message.length > 30 ? message.substring(0, 30) + "..." : message;
         await updateSessionTitle(currentSessionId, title);
       }
-      
-      // Clear image attachments after sending
-      setSelectedImages([]);
 
       if (selectedAI === "all") {
         // Call all AIs in parallel
@@ -1510,8 +1255,7 @@ export default function ChatInterface() {
             </div>
 
         {/* Messages */}
-        <div className="relative flex-1 overflow-hidden">
-          <ScrollArea className="h-full p-4" ref={scrollAreaRef} onScrollCapture={handleScroll}>
+        <ScrollArea className="flex-1 p-4">
           {!currentSessionId ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
@@ -1593,31 +1337,11 @@ export default function ChatInterface() {
                                 em: ({node, ...props}) => <em className="italic" {...props} />,
                               }}
                             >
-                              {typeof message.content === 'string' ? message.content : extractContentParts(message).text}
+                              {message.content}
                             </Markdown>
                           </div>
                         ) : (
-                          (() => {
-                            const { text, images } = extractContentParts(message);
-                            return (
-                              <div className="flex-1 space-y-2">
-                                {images.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mb-2">
-                                    {images.map((url, idx) => (
-                                      <img 
-                                        key={idx}
-                                        src={url} 
-                                        alt={`Uploaded image ${idx + 1}`}
-                                        className="max-w-[200px] max-h-[200px] object-contain rounded-lg border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                                        onClick={() => window.open(url, '_blank')}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                                <p className="text-sm whitespace-pre-wrap">{text}</p>
-                              </div>
-                            );
-                          })()
+                          <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
                         )}
                        {message.role === 'assistant' && message.ai_model && (
                          <DropdownMenu>
@@ -1630,39 +1354,35 @@ export default function ChatInterface() {
                              {Object.entries(AI_CONFIGS)
                                .filter(([key]) => key !== 'all' && key !== message.ai_model)
                                .map(([key, config]) => (
-                                  <DropdownMenuItem
-                                    key={key}
-                                    onClick={() => {
-                                      const { text } = extractContentParts(message);
-                                      forwardMessage(text, message.ai_model!, key as SpecificAI);
-                                    }}
-                                    className="gap-2"
-                                  >
-                                    <span>{config.icon}</span>
-                                    Forward to {config.name}
-                                  </DropdownMenuItem>
-                               ))}
-                               {!message.ledger && (
                                  <DropdownMenuItem
-                                   onClick={() => {
-                                     const { text } = extractContentParts(message);
-                                     const content = text.includes('📍') 
-                                       ? text.substring(text.indexOf('📍') + 1, text.indexOf('📍') + 151).trim()
-                                       : text.substring(0, 150);
-                                     
-                                     // Add to queue
-                                     setPinQueue(prev => {
-                                       const alreadyQueued = prev.some(p => p.messageId === message.id);
-                                       if (alreadyQueued) return prev;
-                                       
-                                       return [...prev, { messageId: message.id, content }];
-                                     });
-                                   }}
+                                   key={key}
+                                   onClick={() => forwardMessage(message.content, message.ai_model!, key as SpecificAI)}
                                    className="gap-2"
                                  >
-                                   📍 Save to Ledger
+                                   <span>{config.icon}</span>
+                                   Forward to {config.name}
                                  </DropdownMenuItem>
-                               )}
+                               ))}
+                              {!message.ledger && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const content = message.content.includes('📍') 
+                                      ? message.content.substring(message.content.indexOf('📍') + 1, message.content.indexOf('📍') + 151).trim()
+                                      : message.content.substring(0, 150);
+                                    
+                                    // Add to queue
+                                    setPinQueue(prev => {
+                                      const alreadyQueued = prev.some(p => p.messageId === message.id);
+                                      if (alreadyQueued) return prev;
+                                      
+                                      return [...prev, { messageId: message.id, content }];
+                                    });
+                                  }}
+                                  className="gap-2"
+                                >
+                                  📍 Save to Ledger
+                                </DropdownMenuItem>
+                              )}
                            </DropdownMenuContent>
                          </DropdownMenu>
                        )}
@@ -1708,20 +1428,7 @@ export default function ChatInterface() {
               <div ref={messagesEndRef} />
             </div>
           )}
-          </ScrollArea>
-          
-          {/* Scroll to bottom button */}
-          {!isAtBottom && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="absolute bottom-4 right-4 shadow-lg bg-card/90 backdrop-blur-sm"
-              onClick={scrollToBottom}
-            >
-              New messages ↓
-            </Button>
-          )}
-        </div>
+        </ScrollArea>
 
         {/* Pin Prompt - Non-Blocking Docked Card */}
         {pinQueue.length > 0 && (
@@ -1816,24 +1523,6 @@ export default function ChatInterface() {
                       </Button>
                     </Badge>
                   ))}
-                  
-                  {selectedImages.map((file, idx) => (
-                    <div key={idx} className="relative inline-block">
-                      <img 
-                        src={URL.createObjectURL(file)} 
-                        alt={file.name}
-                        className="h-16 w-16 object-cover rounded border"
-                      />
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="absolute -top-2 -right-2 h-4 w-4 rounded-full p-0"
-                        onClick={() => setSelectedImages(prev => prev.filter((_, i) => i !== idx))}
-                      >
-                        <X className="h-2 w-2" />
-                      </Button>
-                    </div>
-                  ))}
                 </div>
                 
                 {/* Show detached items that can be re-attached */}
@@ -1882,39 +1571,14 @@ export default function ChatInterface() {
                 accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
               />
               
-              <input
-                ref={imageInputRef}
-                type="file"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  setSelectedImages(prev => [...prev, ...files]);
-                  e.target.value = '';
-                }}
-                className="hidden"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-              />
-              
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!currentSessionId}
                 className="shrink-0"
-                title="Attach file"
               >
                 <Paperclip className="w-4 h-4" />
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={!currentSessionId}
-                className="shrink-0"
-                title="Attach image for vision"
-              >
-                <span className="text-base">🖼️</span>
               </Button>
               
               <Textarea

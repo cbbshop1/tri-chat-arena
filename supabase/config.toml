@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.chat-openai]
 verify_jwt = false
 
-[functions.generate-image]
-verify_jwt = false
-
 [functions.chat-claude]
 verify_jwt = false
 
