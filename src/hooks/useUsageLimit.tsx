@@ -2,17 +2,19 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useSubscription } from "./useSubscription";
+import { useRole } from "./useRole";
 
 const DAILY_MESSAGE_LIMIT = 20;
 
 export const useUsageLimit = () => {
   const { user } = useAuth();
   const { subscribed } = useSubscription();
+  const { isAdmin } = useRole();
   const [dailyUsage, setDailyUsage] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const checkDailyUsage = async () => {
-    if (subscribed) {
+    if (subscribed || isAdmin) {
       setDailyUsage(0);
       setLoading(false);
       return;
@@ -41,7 +43,7 @@ export const useUsageLimit = () => {
   };
 
   const incrementUsage = async (): Promise<boolean> => {
-    if (subscribed) return true;
+    if (subscribed || isAdmin) return true;
 
     // Only allow usage tracking for authenticated users
     if (!user?.id) return false;
@@ -64,18 +66,18 @@ export const useUsageLimit = () => {
   };
 
   const canSendMessage = () => {
-    if (subscribed) return true;
+    if (subscribed || isAdmin) return true;
     return dailyUsage < DAILY_MESSAGE_LIMIT;
   };
 
   const remainingMessages = () => {
-    if (subscribed) return Infinity;
+    if (subscribed || isAdmin) return Infinity;
     return Math.max(0, DAILY_MESSAGE_LIMIT - dailyUsage);
   };
 
   useEffect(() => {
     checkDailyUsage();
-  }, [user, subscribed]);
+  }, [user, subscribed, isAdmin]);
 
   return {
     dailyUsage,
