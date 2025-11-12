@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useUsageLimit } from '@/hooks/useUsageLimit';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KnowledgeManager from './KnowledgeManager';
 import LedgerSearcher from './LedgerSearcher';
+import { ResearchLibrary } from '@/components/research/ResearchLibrary';
 import { useAuth } from '@/hooks/useAuth';
 import Markdown from 'react-markdown';
 
@@ -1147,6 +1148,10 @@ export default function ChatInterface() {
                   <Bot className="w-4 h-4 mr-1" />
                   Knowledge
                 </TabsTrigger>
+                <TabsTrigger value="research" className="flex-1">
+                  <FileText className="w-4 h-4 mr-1" />
+                  Research
+                </TabsTrigger>
                 <TabsTrigger value="memories" className="flex-1">
                   🧠 Memories
                 </TabsTrigger>
@@ -1195,6 +1200,12 @@ export default function ChatInterface() {
                     knowledgeBase={knowledgeBase} 
                     onRefresh={loadKnowledgeBase}
                   />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="research" className="flex-1 mt-0 overflow-hidden">
+                <div className="p-2 h-full">
+                  <ResearchLibrary />
                 </div>
               </TabsContent>
 

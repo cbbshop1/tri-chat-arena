@@ -244,6 +244,42 @@ export type Database = {
           },
         ]
       }
+      research_library: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          id: string
+          source_filename: string | null
+          tags: Json
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          content: string
+          created_at?: string
+          id?: string
+          source_filename?: string | null
+          tags?: Json
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          source_filename?: string | null
+          tags?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subscribers: {
         Row: {
           created_at: string
@@ -324,22 +360,12 @@ export type Database = {
       }
     }
     Functions: {
-      compute_canonical_hash: {
-        Args: { data: Json }
-        Returns: string
-      }
-      create_ledger_batch: {
-        Args: { p_entry_ids: string[] }
-        Returns: string
-      }
-      get_daily_usage: {
-        Args: { p_email?: string; p_user_id?: string } | { p_user_id: string }
-        Returns: number
-      }
-      get_prev_hash: {
-        Args: { p_agent_id: string }
-        Returns: string
-      }
+      compute_canonical_hash: { Args: { data: Json }; Returns: string }
+      create_ledger_batch: { Args: { p_entry_ids: string[] }; Returns: string }
+      get_daily_usage:
+        | { Args: { p_email?: string; p_user_id?: string }; Returns: number }
+        | { Args: { p_user_id: string }; Returns: number }
+      get_prev_hash: { Args: { p_agent_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -347,10 +373,9 @@ export type Database = {
         }
         Returns: boolean
       }
-      increment_daily_usage: {
-        Args: { p_email?: string; p_user_id?: string } | { p_user_id: string }
-        Returns: number
-      }
+      increment_daily_usage:
+        | { Args: { p_email?: string; p_user_id?: string }; Returns: number }
+        | { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"
