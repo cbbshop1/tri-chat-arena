@@ -115,20 +115,19 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-2025-04-14',
+        model: 'gpt-5.1-instant',
         messages: [
           ...conversation_history,
           { role: 'user', content: message }
         ],
-        temperature: 0.7,
         stream: true
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('OpenAI API error:', errorData);
-      throw new Error(`OpenAI API error: ${response.status}`);
+      console.error('OpenAI API error:', { status: response.status, statusText: response.statusText, error: errorData });
+      throw new Error(`OpenAI API error: ${response.status} - ${errorData}`);
     }
 
     // Return the stream directly
