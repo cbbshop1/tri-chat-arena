@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import KnowledgeManager from './KnowledgeManager';
 import LedgerSearcher from './LedgerSearcher';
 import { ResearchLibrary } from '@/components/research/ResearchLibrary';
@@ -89,6 +90,7 @@ export default function ChatInterface() {
   const [attachedFiles, setAttachedFiles] = useState<ChatFile[]>([]);
   const [attachedLedgerEntries, setAttachedLedgerEntries] = useState<LedgerEntry[]>([]);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +103,12 @@ export default function ChatInterface() {
   // Load sessions on mount and check for pinned ledger entries
   useEffect(() => {
     loadSessions();
+    
+    // Load web search preference from localStorage
+    const savedWebSearch = localStorage.getItem('webSearchEnabled');
+    if (savedWebSearch !== null) {
+      setWebSearchEnabled(savedWebSearch === 'true');
+    }
     
     // Check sessionStorage for pinned ledger entries
     const pinnedEntries = sessionStorage.getItem('pinnedLedgerEntries');
@@ -546,7 +554,8 @@ export default function ChatInterface() {
         body: JSON.stringify({
           message,
           conversation_history: conversationHistory,
-          sessionId: currentSessionId
+          sessionId: currentSessionId,
+          webSearchEnabled: webSearchEnabled
         }),
       }
     );
@@ -1234,7 +1243,7 @@ export default function ChatInterface() {
               </div>
               
               {/* AI Selector & Export */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 {currentSessionId && (
                   <Button
                     variant="outline"
@@ -1276,6 +1285,29 @@ export default function ChatInterface() {
                   </Button>
                 ))}
               </div>
+            </div>
+
+            {/* Web Search Toggle Bar */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
+              <Switch 
+                id="web-search"
+                checked={webSearchEnabled}
+                onCheckedChange={(checked) => {
+                  setWebSearchEnabled(checked);
+                  localStorage.setItem('webSearchEnabled', String(checked));
+                }}
+              />
+              <label 
+                htmlFor="web-search" 
+                className="text-sm font-medium cursor-pointer flex items-center gap-1.5"
+              >
+                🌐 Web Search
+                {webSearchEnabled && loading && (
+                  <span className="text-xs text-muted-foreground animate-pulse">
+                    (may search if needed)
+                  </span>
+                )}
+              </label>
             </div>
 
         {/* Messages */}

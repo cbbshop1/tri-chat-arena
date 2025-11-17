@@ -75,6 +75,8 @@ function formatSearchResults(results: SearchResult[]): string {
   ).join('\n\n');
 }
 
+const SYSTEM_PROMPT = 'You are a helpful AI assistant with access to web search. Use the web_search function when users explicitly ask about current events, recent news, breaking stories, today\'s information, or real-time data (weather, stocks, sports scores). Only search when the information is clearly time-sensitive and recent.';
+
 const tools = [
   {
     type: "function",
@@ -103,7 +105,7 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const { message, conversation_history = [], sessionId } = await req.json();
+    const { message, conversation_history = [], sessionId, webSearchEnabled = true } = await req.json();
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!openAIApiKey) {
@@ -191,8 +193,15 @@ serve(async (req) => {
       }
     }
 
+    // Detect if user is asking for current/recent information
+    const needsCurrentInfo = /\b(latest|current|today|now|recent|breaking|news|weather|stock|score|price|2025|2024|happening)\b/i.test(message);
+    const toolChoice = needsCurrentInfo ? { type: "function", function: { name: "web_search" } } : "auto";
+    
+    // Only include tools if web search is enabled
+    const activeTools = webSearchEnabled ? tools : undefined;
+
     // Step 1: Check if tool calling is needed (non-streaming initial call)
-    logStep("Checking for tool calls");
+    logStep("Checking for tool calls", { webSearchEnabled });
     const initialResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -202,11 +211,12 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-5-mini-2025-08-07',
         messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
           ...conversation_history,
           { role: 'user', content: message }
         ],
-        tools: tools,
-        tool_choice: "auto",
+        ...(activeTools && { tools: activeTools }),
+        ...(activeTools && { tool_choice: toolChoice }),
         stream: false
       }),
     });
@@ -239,6 +249,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'gpt-5-mini-2025-08-07',
           messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
             ...conversation_history,
             { role: 'user', content: message },
             initialData.choices[0].message,
@@ -279,6 +290,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-5-mini-2025-08-07',
         messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
           ...conversation_history,
           { role: 'user', content: message }
         ],
