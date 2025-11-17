@@ -20,43 +20,65 @@ interface SearchResult {
 
 async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   try {
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    // Use DuckDuckGo Instant Answer API (official, free, returns JSON)
+    const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
     
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; AISearch/1.0)'
-      }
-    });
+    logStep("Calling DuckDuckGo API", { query, apiUrl });
     
-    const html = await response.text();
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    
+    logStep("DuckDuckGo API response", { hasAbstract: !!data.Abstract, relatedTopicsCount: data.RelatedTopics?.length || 0 });
+    
     const results: SearchResult[] = [];
     
-    // Simple regex to extract results
-    const titleRegex = /<a class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g;
-    const snippetRegex = /<a class="result__snippet"[^>]*>(.*?)<\/a>/g;
-    
-    const titles: Array<{ url: string; title: string }> = [];
-    let titleMatch;
-    while ((titleMatch = titleRegex.exec(html)) !== null && titles.length < 5) {
-      titles.push({
-        url: titleMatch[1].replace(/&amp;/g, '&'),
-        title: titleMatch[2].replace(/<[^>]*>/g, '').trim()
-      });
-    }
-    
-    const snippets: string[] = [];
-    let snippetMatch;
-    while ((snippetMatch = snippetRegex.exec(html)) !== null && snippets.length < 5) {
-      snippets.push(snippetMatch[1].replace(/<[^>]*>/g, '').trim());
-    }
-    
-    for (let i = 0; i < Math.min(titles.length, snippets.length); i++) {
+    // Add main abstract if available
+    if (data.Abstract && data.AbstractURL) {
       results.push({
-        title: titles[i].title,
-        url: titles[i].url,
-        snippet: snippets[i]
+        title: data.Heading || query,
+        snippet: data.AbstractText || data.Abstract,
+        url: data.AbstractURL
       });
     }
+    
+    // Add related topics (these are often the most relevant results)
+    if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
+      for (const topic of data.RelatedTopics.slice(0, 5)) {
+        // Some topics are nested in "Topics" array
+        if (topic.Topics && Array.isArray(topic.Topics)) {
+          for (const subTopic of topic.Topics.slice(0, 3)) {
+            if (subTopic.Text && subTopic.FirstURL && results.length < 5) {
+              results.push({
+                title: subTopic.Text.split(' - ')[0] || subTopic.Text.substring(0, 100),
+                snippet: subTopic.Text,
+                url: subTopic.FirstURL
+              });
+            }
+          }
+        } else if (topic.Text && topic.FirstURL && results.length < 5) {
+          results.push({
+            title: topic.Text.split(' - ')[0] || topic.Text.substring(0, 100),
+            snippet: topic.Text,
+            url: topic.FirstURL
+          });
+        }
+      }
+    }
+    
+    // Add any additional results
+    if (data.Results && Array.isArray(data.Results)) {
+      for (const result of data.Results.slice(0, 3)) {
+        if (result.Text && result.FirstURL && results.length < 5) {
+          results.push({
+            title: result.Text.split(' - ')[0] || result.Text.substring(0, 100),
+            snippet: result.Text,
+            url: result.FirstURL
+          });
+        }
+      }
+    }
+    
+    logStep("Parsed search results", { resultCount: results.length });
     
     return results;
   } catch (error) {
