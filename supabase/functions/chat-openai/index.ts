@@ -18,71 +18,49 @@ interface SearchResult {
   url: string;
 }
 
-async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
+async function searchWeb(query: string): Promise<SearchResult[]> {
   try {
-    // Use DuckDuckGo Instant Answer API (official, free, returns JSON)
-    const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const braveApiKey = Deno.env.get('BRAVE_API_KEY');
     
-    logStep("Calling DuckDuckGo API", { query, apiUrl });
+    if (!braveApiKey) {
+      logStep("Brave API key not configured, skipping search");
+      return [];
+    }
     
-    const response = await fetch(apiUrl);
+    const apiUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+    
+    logStep("Calling Brave Search API", { query, apiUrl });
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Subscription-Token': braveApiKey
+      }
+    });
+
+    if (!response.ok) {
+      logStep("Brave API error", { status: response.status, statusText: response.statusText });
+      return [];
+    }
+
     const data = await response.json();
-    
-    logStep("DuckDuckGo API response", { hasAbstract: !!data.Abstract, relatedTopicsCount: data.RelatedTopics?.length || 0 });
-    
     const results: SearchResult[] = [];
-    
-    // Add main abstract if available
-    if (data.Abstract && data.AbstractURL) {
-      results.push({
-        title: data.Heading || query,
-        snippet: data.AbstractText || data.Abstract,
-        url: data.AbstractURL
-      });
-    }
-    
-    // Add related topics (these are often the most relevant results)
-    if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
-      for (const topic of data.RelatedTopics.slice(0, 5)) {
-        // Some topics are nested in "Topics" array
-        if (topic.Topics && Array.isArray(topic.Topics)) {
-          for (const subTopic of topic.Topics.slice(0, 3)) {
-            if (subTopic.Text && subTopic.FirstURL && results.length < 5) {
-              results.push({
-                title: subTopic.Text.split(' - ')[0] || subTopic.Text.substring(0, 100),
-                snippet: subTopic.Text,
-                url: subTopic.FirstURL
-              });
-            }
-          }
-        } else if (topic.Text && topic.FirstURL && results.length < 5) {
-          results.push({
-            title: topic.Text.split(' - ')[0] || topic.Text.substring(0, 100),
-            snippet: topic.Text,
-            url: topic.FirstURL
-          });
-        }
+
+    // Parse Brave's web results
+    if (data.web && data.web.results) {
+      for (const result of data.web.results.slice(0, 5)) {
+        results.push({
+          title: result.title || 'No title',
+          snippet: result.description || result.snippet || '',
+          url: result.url
+        });
       }
     }
-    
-    // Add any additional results
-    if (data.Results && Array.isArray(data.Results)) {
-      for (const result of data.Results.slice(0, 3)) {
-        if (result.Text && result.FirstURL && results.length < 5) {
-          results.push({
-            title: result.Text.split(' - ')[0] || result.Text.substring(0, 100),
-            snippet: result.Text,
-            url: result.FirstURL
-          });
-        }
-      }
-    }
-    
+
     logStep("Parsed search results", { resultCount: results.length });
-    
     return results;
   } catch (error) {
-    logStep("Error searching DuckDuckGo", { error: error.message });
+    logStep("Error searching", { error: error.message });
     return [];
   }
 }
@@ -257,7 +235,7 @@ serve(async (req) => {
       const searchQuery = JSON.parse(toolCalls[0].function.arguments).query;
       logStep("Executing web search", { query: searchQuery });
       
-      const searchResults = await searchDuckDuckGo(searchQuery);
+      const searchResults = await searchWeb(searchQuery);
       const formattedResults = formatSearchResults(searchResults);
       logStep("Search completed", { resultCount: searchResults.length });
       
