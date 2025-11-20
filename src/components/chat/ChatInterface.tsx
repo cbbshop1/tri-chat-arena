@@ -401,7 +401,8 @@ export default function ChatInterface() {
         body: JSON.stringify({
           message,
           conversation_history: conversationHistory,
-          sessionId: currentSessionId
+          sessionId: currentSessionId,
+          webSearchEnabled: webSearchEnabled
         }),
       }
     );
@@ -478,7 +479,8 @@ export default function ChatInterface() {
         body: JSON.stringify({
           message,
           conversation_history: conversationHistory,
-          sessionId: currentSessionId
+          sessionId: currentSessionId,
+          webSearchEnabled: webSearchEnabled
         }),
       }
     );
