@@ -12,6 +12,71 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CHAT-CLAUDE] ${step}${detailsStr}`);
 };
 
+interface SearchResult {
+  title: string;
+  snippet: string;
+  url: string;
+}
+
+async function searchWeb(query: string): Promise<SearchResult[]> {
+  try {
+    const braveApiKey = Deno.env.get('BRAVE_API_KEY');
+    
+    if (!braveApiKey) {
+      logStep("Brave API key not configured, skipping search");
+      return [];
+    }
+    
+    const apiUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`;
+    
+    logStep("Calling Brave Search API", { query, apiUrl });
+    
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Subscription-Token': braveApiKey
+      }
+    });
+
+    if (!response.ok) {
+      logStep("Brave API error", { status: response.status, statusText: response.statusText });
+      return [];
+    }
+
+    const data = await response.json();
+    const results: SearchResult[] = [];
+
+    // Parse Brave's web results
+    if (data.web && data.web.results) {
+      for (const result of data.web.results.slice(0, 5)) {
+        results.push({
+          title: result.title || 'No title',
+          snippet: result.description || result.snippet || '',
+          url: result.url
+        });
+      }
+    }
+
+    logStep("Parsed search results", { resultCount: results.length });
+    return results;
+  } catch (error) {
+    logStep("Error searching", { error: error.message });
+    return [];
+  }
+}
+
+function formatSearchResults(results: SearchResult[]): string {
+  if (results.length === 0) {
+    return "No search results found.";
+  }
+  
+  return results.map((result, index) => 
+    `${index + 1}. ${result.title}\n   ${result.snippet}\n   Source: ${result.url}`
+  ).join('\n\n');
+}
+
+const SYSTEM_PROMPT = `You are a helpful AI assistant with access to current web information. When users ask about recent events, news, or time-sensitive information, use the web_search tool to get up-to-date information. After receiving search results, incorporate them naturally into your response and cite sources.`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,7 +85,7 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const { message, conversation_history = [], sessionId } = await req.json();
+    const { message, conversation_history = [], sessionId, webSearchEnabled = false } = await req.json();
     const anthropicApiKey = Deno.env.get('ANTHROPIC_API_KEY');
 
     if (!anthropicApiKey) {
@@ -108,6 +173,119 @@ serve(async (req) => {
       }
     }
 
+    // Define web search tool (Claude format)
+    const tools = [{
+      name: "web_search",
+      description: "Search the web for current events, news, or recent information. Use this when the user asks about recent, current, or time-sensitive information.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search query to find current information"
+          }
+        },
+        required: ["query"]
+      }
+    }];
+
+    // Check if we should use web search
+    const shouldCheckForWebSearch = webSearchEnabled && 
+      /\b(latest|current|today|recent|news|now|this (week|month|year)|2025|happening)\b/i.test(message);
+
+    logStep("Web search check", { webSearchEnabled, shouldCheckForWebSearch });
+
+    // If web search might be needed, make initial non-streaming call to check for tool use
+    if (shouldCheckForWebSearch) {
+      logStep("Checking if web search is needed");
+      
+      const checkResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicApiKey,
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 500,
+          system: SYSTEM_PROMPT,
+          messages: [
+            ...conversation_history,
+            { role: 'user', content: message }
+          ],
+          tools: tools,
+          stream: false
+        }),
+      });
+
+      if (!checkResponse.ok) {
+        const errorData = await checkResponse.text();
+        console.error('Anthropic API error:', errorData);
+        throw new Error(`Anthropic API error: ${checkResponse.status}`);
+      }
+
+      const checkData = await checkResponse.json();
+      logStep("Tool use check response", { hasToolUse: checkData.content?.some((c: any) => c.type === 'tool_use') });
+
+      // Check if Claude wants to use the web_search tool
+      const toolUse = checkData.content?.find((c: any) => c.type === 'tool_use' && c.name === 'web_search');
+      
+      if (toolUse) {
+        const searchQuery = toolUse.input.query;
+        logStep("Executing web search", { query: searchQuery });
+        
+        const searchResults = await searchWeb(searchQuery);
+        const formattedResults = formatSearchResults(searchResults);
+        logStep("Search completed", { resultCount: searchResults.length });
+
+        // Make final streaming call with search results
+        const finalResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': anthropicApiKey,
+            'Content-Type': 'application/json',
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 500,
+            system: SYSTEM_PROMPT,
+            messages: [
+              ...conversation_history,
+              { role: 'user', content: message },
+              { role: 'assistant', content: checkData.content },
+              { 
+                role: 'user', 
+                content: [{
+                  type: 'tool_result',
+                  tool_use_id: toolUse.id,
+                  content: formattedResults
+                }]
+              }
+            ],
+            stream: true
+          }),
+        });
+
+        if (!finalResponse.ok) {
+          const errorData = await finalResponse.text();
+          console.error('Anthropic API error:', errorData);
+          throw new Error(`Anthropic API error: ${finalResponse.status}`);
+        }
+
+        return new Response(finalResponse.body, {
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+          },
+        });
+      }
+    }
+
+    // No web search needed, proceed with normal streaming
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -118,6 +296,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 500,
+        system: SYSTEM_PROMPT,
         messages: [
           ...conversation_history,
           { role: 'user', content: message }
