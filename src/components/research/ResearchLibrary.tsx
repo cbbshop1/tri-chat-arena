@@ -524,7 +524,7 @@ export function ResearchLibrary() {
         />
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 h-0">
         <div className="space-y-3">
           {filteredLibrary.map((entry) => (
             <Card key={entry.id}>
