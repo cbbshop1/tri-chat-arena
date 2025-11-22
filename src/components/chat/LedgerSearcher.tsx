@@ -243,7 +243,7 @@ export default function LedgerSearcher({ onAttachEntry, attachedEntryIds }: Ledg
       </div>
 
       {/* Results */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="h-[calc(100vh-280px)]">
         <div className="p-2 space-y-2">
           {filteredEntries.length === 0 ? (
             <Card className="p-6 text-center">

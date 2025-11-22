@@ -266,7 +266,7 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
         )}
       </div>
 
-      <ScrollArea className="h-96">
+      <ScrollArea className="h-[calc(100vh-350px)]">
         <div className="space-y-3">
           {filteredKnowledge.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
