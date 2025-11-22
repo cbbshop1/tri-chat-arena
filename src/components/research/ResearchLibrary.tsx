@@ -481,7 +481,7 @@ export function ResearchLibrary() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5 text-primary" />
