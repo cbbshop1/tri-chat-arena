@@ -1214,8 +1214,8 @@ export default function ChatInterface() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="research" className="flex-1 mt-0 overflow-hidden">
-                <div className="p-2 h-full">
+              <TabsContent value="research" className="flex-1 mt-0 overflow-hidden flex flex-col">
+                <div className="p-2 flex-1 min-h-0">
                   <ResearchLibrary />
                 </div>
               </TabsContent>
