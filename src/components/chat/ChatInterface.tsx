@@ -1168,8 +1168,8 @@ export default function ChatInterface() {
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="chats" className="flex-1 mt-0">
-                <ScrollArea className="h-full">
+              <TabsContent value="chats" className="flex-1 mt-0 flex flex-col">
+                <ScrollArea className="flex-1">
                   <div className="p-2">
                     {sessions.map((session) => (
                       <div
@@ -1205,8 +1205,8 @@ export default function ChatInterface() {
                 </ScrollArea>
               </TabsContent>
               
-              <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden">
-                <div className="p-2 h-full">
+              <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden flex flex-col">
+                <div className="p-2 flex-1 min-h-0">
                   <KnowledgeManager 
                     knowledgeBase={knowledgeBase} 
                     onRefresh={loadKnowledgeBase}
@@ -1220,7 +1220,7 @@ export default function ChatInterface() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden h-full">
+              <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden flex flex-col">
                 <LedgerSearcher
                   onAttachEntry={handleAttachLedgerEntry}
                   attachedEntryIds={attachedLedgerEntries.map(e => e.id)}
