@@ -1,5 +1,3 @@
-
-```typescript
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -48,7 +46,6 @@ async function searchWeb(query: string): Promise<SearchResult[]> {
     const data = await response.json();
     const results: SearchResult[] = [];
 
-    // Parse Brave's web results
     if (data.web && data.web.results) {
       for (const result of data.web.results.slice(0, 5)) {
         results.push({
@@ -94,7 +91,6 @@ serve(async (req) => {
       throw new Error('Anthropic API key not configured');
     }
 
-    // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -106,7 +102,6 @@ serve(async (req) => {
     let userEmail = null;
     let isSubscribed = false;
 
-    // Check if user is authenticated and subscribed
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
       const { data: userData } = await supabaseClient.auth.getUser(token);
@@ -115,7 +110,6 @@ serve(async (req) => {
         userEmail = userData.user.email;
         logStep("Authenticated user found", { userId, email: userEmail });
 
-        // Check subscription status
         const { data: subscriptionData } = await supabaseClient
           .from('subscribers')
           .select('subscribed')
@@ -127,16 +121,13 @@ serve(async (req) => {
       }
     }
 
-    // For non-subscribers, check usage limits
     if (!isSubscribed) {
-      // Use service role client for usage operations to bypass RLS securely
       const serviceSupabase = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
         { auth: { persistSession: false } }
       );
       
-      // Get current daily usage (only for authenticated users now)
       const { data: currentUsage, error: usageError } = await serviceSupabase
         .rpc('get_daily_usage', { 
           p_user_id: userId
@@ -162,7 +153,6 @@ serve(async (req) => {
         });
       }
 
-      // Increment usage count for non-subscribers
       const { data: newUsage, error: incrementError } = await serviceSupabase
         .rpc('increment_daily_usage', { 
           p_user_id: userId
@@ -175,7 +165,6 @@ serve(async (req) => {
       }
     }
 
-    // Define web search tool (Claude format)
     const tools = [{
       name: "web_search",
       description: "Search the web for current events, news, or recent information. Use this when the user asks about recent, current, or time-sensitive information.",
@@ -191,13 +180,11 @@ serve(async (req) => {
       }
     }];
 
-    // Check if we should use web search
     const shouldCheckForWebSearch = webSearchEnabled && 
       /\b(latest|current|today|recent|news|now|this (week|month|year)|2025|happening)\b/i.test(message);
 
     logStep("Web search check", { webSearchEnabled, shouldCheckForWebSearch });
 
-    // If web search might be needed, make initial non-streaming call to check for tool use
     if (shouldCheckForWebSearch) {
       logStep("Checking if web search is needed");
       
@@ -230,7 +217,6 @@ serve(async (req) => {
       const checkData = await checkResponse.json();
       logStep("Tool use check response", { hasToolUse: checkData.content?.some((c: any) => c.type === 'tool_use') });
 
-      // Check if Claude wants to use the web_search tool
       const toolUse = checkData.content?.find((c: any) => c.type === 'tool_use' && c.name === 'web_search');
       
       if (toolUse) {
@@ -241,7 +227,6 @@ serve(async (req) => {
         const formattedResults = formatSearchResults(searchResults);
         logStep("Search completed", { resultCount: searchResults.length });
 
-        // Make final streaming call with search results
         const finalResponse = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -287,7 +272,6 @@ serve(async (req) => {
       }
     }
 
-    // No web search needed, proceed with normal streaming
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -313,25 +297,6 @@ serve(async (req) => {
       throw new Error(`Anthropic API error: ${response.status}`);
     }
 
-    // Return the stream directly
-    return new Response(response.body, {
-      headers: { 
-        ...corsHeaders, 
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-      },
-    });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-});
-```
-    // Return the stream directly
     return new Response(response.body, {
       headers: { 
         ...corsHeaders, 
