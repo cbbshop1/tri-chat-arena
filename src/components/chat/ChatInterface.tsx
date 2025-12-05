@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useUsageLimit } from '@/hooks/useUsageLimit';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Badge } from '@/components/ui/badge';
@@ -14,14 +15,18 @@ import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import KnowledgeManager from './KnowledgeManager';
 import LedgerSearcher from './LedgerSearcher';
 import { ResearchLibrary } from '@/components/research/ResearchLibrary';
 import { useAuth } from '@/hooks/useAuth';
+import { MobileBottomNav } from './MobileBottomNav';
+import { MobileAISelector } from './MobileAISelector';
 import Markdown from 'react-markdown';
 
 type AIModel = "chatgpt" | "claude" | "deepseek" | "all";
 type SpecificAI = Exclude<AIModel, "all">;
+type MobileTab = 'chats' | 'knowledge' | 'research' | 'memories';
 
 interface ChatSession {
   id: string;
@@ -69,6 +74,16 @@ interface LedgerEntry {
   timestamp: string;
 }
 
+interface LedgerSearchEntry {
+  id: string;
+  created_at: string;
+  agent_id: string;
+  entry_type: string;
+  body_json: any;
+  body_hash: string;
+  prev_hash?: string;
+}
+
 const AI_CONFIGS = {
   chatgpt: { name: "ChatGPT", color: "chatgpt", icon: "🤖" },
   claude: { name: "Claude", color: "claude", icon: "🧠" },
@@ -91,6 +106,7 @@ export default function ChatInterface() {
   const [attachedLedgerEntries, setAttachedLedgerEntries] = useState<LedgerEntry[]>([]);
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
+  const [mobileDrawerTab, setMobileDrawerTab] = useState<MobileTab | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +115,7 @@ export default function ChatInterface() {
   const { subscribed } = useSubscription();
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
   const { user, signOut } = useAuth();
+  const isMobile = useIsMobile();
 
   // Load sessions on mount and check for pinned ledger entries
   useEffect(() => {
@@ -141,13 +158,11 @@ export default function ChatInterface() {
     const container = messagesContainerRef.current;
     if (!container || !messagesEndRef.current) return;
 
-    // Check current scroll position synchronously
     const scrollTop = container.scrollTop;
     const scrollHeight = container.scrollHeight;
     const clientHeight = container.clientHeight;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     
-    // Only auto-scroll if user is within 100px of bottom
     if (distanceFromBottom < 100) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
@@ -157,9 +172,9 @@ export default function ChatInterface() {
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = '44px'; // Reset to min height
+      textarea.style.height = '44px';
       const scrollHeight = textarea.scrollHeight;
-      const maxHeight = 120; // 4 lines approximate
+      const maxHeight = 120;
       textarea.style.height = Math.min(scrollHeight, maxHeight) + 'px';
     }
   }, [input]);
@@ -170,13 +185,11 @@ export default function ChatInterface() {
     
     const lastMessage = messages[messages.length - 1];
     
-    // Only check messages that aren't already ledger-saved
     if (!lastMessage.ledger && lastMessage.content.includes('📍')) {
       const pinIndex = lastMessage.content.indexOf('📍');
       const contentAfterPin = lastMessage.content.substring(pinIndex + 1, pinIndex + 151).trim();
       
       if (contentAfterPin.length > 0) {
-        // Auto-save user pins immediately
         if (lastMessage.role === 'user') {
           saveToLedger(lastMessage.id, contentAfterPin);
           toast({
@@ -184,11 +197,9 @@ export default function ChatInterface() {
             description: "Your pin has been saved to the ledger.",
           });
         } else {
-          // AI pins go to queue and show modal
           setPinQueue(prev => {
             const alreadyQueued = prev.some(p => p.messageId === lastMessage.id);
             if (alreadyQueued) return prev;
-            
             return [...prev, { messageId: lastMessage.id, content: contentAfterPin }];
           });
         }
@@ -225,7 +236,6 @@ export default function ChatInterface() {
 
       if (error) throw error;
       
-      // Type-safe mapping to ensure role is correct type
       const typedMessages: Message[] = (data || []).map(msg => ({
         id: msg.id,
         content: msg.content,
@@ -267,6 +277,7 @@ export default function ChatInterface() {
       
       await loadSessions();
       setCurrentSessionId(data.id);
+      setMobileDrawerTab(null); // Close drawer on mobile
       toast({
         title: "Success",
         description: "New chat session created",
@@ -320,7 +331,7 @@ export default function ChatInterface() {
           content,
           role,
           ai_model: aiModel,
-          target_ai: targetAI // Track which AI this message was intended for
+          target_ai: targetAI
         }])
         .select()
         .single();
@@ -351,10 +362,8 @@ export default function ChatInterface() {
     return messages
       .filter(msg => {
         if (msg.role === 'assistant') {
-          // Only include assistant messages from the target AI
           return msg.ai_model === targetAI;
         } else {
-          // For user messages, only include those intended for this AI or forwarded messages
           return msg.target_ai === targetAI || msg.target_ai === 'all' || 
                  (msg.content && msg.content.includes('[Forwarded from'));
         }
@@ -368,12 +377,9 @@ export default function ChatInterface() {
   const callAI = async (ai: SpecificAI, message: string): Promise<string | { reply: string; tempId: string }> => {
     const conversationHistory = getConversationHistory(ai);
     const context = getContextForAI();
-    const functionName = ai === 'chatgpt' ? 'chat-openai' : `chat-${ai}`;
     
-    // Prepend context to the message if available
     const messageWithContext = context ? `${context}\n\nUser Message: ${message}` : message;
     
-    // All AIs now use streaming
     if (ai === 'deepseek') {
       const result = await streamDeepSeek(messageWithContext, conversationHistory);
       return { reply: result.response, tempId: result.tempId };
@@ -417,7 +423,6 @@ export default function ChatInterface() {
 
     if (!reader) throw new Error('No reader available');
 
-    // Create a placeholder message that we'll update
     const tempMessageId = `temp-${Date.now()}`;
     setMessages(prev => [...prev, {
       id: tempMessageId,
@@ -445,7 +450,6 @@ export default function ChatInterface() {
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) {
                 fullResponse += content;
-                // Update the message in real-time
                 setMessages(prev => prev.map(msg => 
                   msg.id === tempMessageId 
                     ? { ...msg, content: fullResponse }
@@ -462,7 +466,6 @@ export default function ChatInterface() {
       reader.releaseLock();
     }
 
-    // Return the full response and the temp ID so we can replace it with the real saved message
     return { response: fullResponse, tempId: tempMessageId };
   };
 
@@ -623,15 +626,12 @@ export default function ChatInterface() {
     
     setLoading(true);
     try {
-      // Create a forwarded message prompt
       const forwardPrompt = `[Forwarded from ${AI_CONFIGS[fromAI].name}]: ${content}`;
       
-      // Call the target AI
       const reply = await callAI(toAI, forwardPrompt);
       const replyContent = typeof reply === 'string' ? reply : reply.reply;
       await saveMessage(replyContent, 'assistant', toAI);
       
-      // Reload messages to show the forwarded response
       await loadMessages(currentSessionId);
       
       toast({
@@ -683,7 +683,6 @@ export default function ChatInterface() {
 
       if (uploadError) throw uploadError;
 
-      // Read file content for preview (if text file)
       let contentPreview = '';
       if (file.type.startsWith('text/') || file.name.endsWith('.md')) {
         contentPreview = await file.text();
@@ -692,7 +691,6 @@ export default function ChatInterface() {
         }
       }
 
-      // Save file metadata
       const { error: dbError } = await supabase
         .from('chat_files')
         .insert([{
@@ -739,7 +737,6 @@ export default function ChatInterface() {
     }
   };
 
-  // Load files when session changes
   useEffect(() => {
     if (currentSessionId) {
       loadChatFiles();
@@ -749,7 +746,6 @@ export default function ChatInterface() {
     }
   }, [currentSessionId]);
 
-  // Auto-attach all knowledge and files when they change
   useEffect(() => {
     setAttachedKnowledge(knowledgeBase);
   }, [knowledgeBase]);
@@ -762,20 +758,14 @@ export default function ChatInterface() {
     const files = Array.from(event.target.files || []);
     setSelectedFiles(files);
     files.forEach(uploadFile);
-    // Reset the input
     if (event.target) {
       event.target.value = '';
     }
   };
 
-  const removeSelectedFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
   const getContextForAI = () => {
     let context = '';
     
-    // Add attached knowledge base context
     if (attachedKnowledge.length > 0) {
       context += '\n--- Knowledge Base ---\n';
       attachedKnowledge.forEach(item => {
@@ -783,7 +773,6 @@ export default function ChatInterface() {
       });
     }
 
-    // Add attached file context
     if (attachedFiles.length > 0) {
       context += '\n--- Uploaded Files ---\n';
       attachedFiles.forEach(file => {
@@ -795,12 +784,10 @@ export default function ChatInterface() {
       });
     }
 
-    // Add attached ledger entries (memory references)
-    // EXTENSION POINT: This will be used by search UI (Option 2) and AI tools (Option 3)
     if (attachedLedgerEntries.length > 0) {
-      context += '\n--- Memory Ledger References ---\n';
+      context += '\n--- Memory References ---\n';
       attachedLedgerEntries.forEach(entry => {
-        context += `[${entry.type}] ${entry.agentId} (${new Date(entry.timestamp).toLocaleString()}):\n${entry.content}\n\n`;
+        context += `[${entry.type}] ${entry.agentId} (${entry.timestamp}):\n${entry.content}\n\n`;
       });
     }
 
@@ -827,215 +814,113 @@ export default function ChatInterface() {
     setAttachedFiles(prev => [...prev, file]);
   };
 
-  const addBackLedgerEntry = (entry: LedgerEntry) => {
-    setAttachedLedgerEntries(prev => [...prev, entry]);
+  const handleAttachLedgerEntry = (entry: LedgerEntry) => {
+    const alreadyAttached = attachedLedgerEntries.some(e => e.id === entry.id);
+    if (alreadyAttached) {
+      setAttachedLedgerEntries(prev => prev.filter(e => e.id !== entry.id));
+    } else {
+      setAttachedLedgerEntries(prev => [...prev, entry]);
+    }
   };
 
-  const handleAttachLedgerEntry = (entry: any) => {
-    // Prevent duplicates
-    if (attachedLedgerEntries.some(e => e.id === entry.id)) {
+  const exportChatSession = () => {
+    if (!currentSessionId || messages.length === 0) {
       toast({
-        title: "Already attached",
-        description: "This memory is already in your chat context",
+        title: "Nothing to export",
+        description: "No messages in current session",
+        variant: "destructive",
       });
       return;
     }
+
+    const currentSession = sessions.find(s => s.id === currentSessionId);
+    const sessionTitle = currentSession?.title || 'Chat Export';
     
-    // Transform the entry to match our LedgerEntry interface
-    const transformedEntry: LedgerEntry = {
-      id: entry.id,
-      content: JSON.stringify(entry.body_json),
-      agentId: entry.agent_id,
-      type: entry.entry_type,
-      timestamp: entry.created_at
-    };
-    
-    setAttachedLedgerEntries(prev => [...prev, transformedEntry]);
-    
-    toast({
-      title: "Memory attached",
-      description: "This memory will be included in your next message",
+    let exportContent = `# ${sessionTitle}\n`;
+    exportContent += `Exported: ${new Date().toLocaleString()}\n\n---\n\n`;
+
+    messages.forEach(msg => {
+      const sender = msg.role === 'user' ? 'You' : AI_CONFIGS[msg.ai_model || 'chatgpt'].name;
+      const timestamp = new Date(msg.created_at).toLocaleTimeString();
+      exportContent += `**${sender}** (${timestamp}):\n${msg.content}\n\n`;
     });
-  };
 
-  const exportChatSession = async () => {
-    if (!currentSessionId) {
-      toast({
-        title: "Error",
-        description: "No chat session selected",
-        variant: "destructive",
-      });
-      return;
-    }
+    const blob = new Blob([exportContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sessionTitle.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
-    try {
-      const currentSession = sessions.find(s => s.id === currentSessionId);
-      if (!currentSession) {
-        throw new Error("Session not found");
-      }
-
-      const exportData = {
-        session: {
-          id: currentSession.id,
-          title: currentSession.title,
-          created_at: currentSession.created_at,
-          updated_at: currentSession.updated_at
-        },
-        messages: messages.map(msg => ({
-          id: msg.id,
-          content: msg.content,
-          role: msg.role,
-          ai_model: msg.ai_model,
-          target_ai: msg.target_ai,
-          created_at: msg.created_at
-        })),
-        files: chatFiles.map(file => ({
-          id: file.id,
-          filename: file.filename,
-          file_type: file.file_type,
-          file_size: file.file_size,
-          content_preview: file.content_preview,
-          created_at: file.created_at
-        })),
-        exported_at: new Date().toISOString()
-      };
-
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json'
-      });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `chat-session-${currentSession.title.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({
-        title: "Success",
-        description: "Chat session exported successfully",
-      });
-    } catch (error) {
-      console.error('Error exporting chat session:', error);
-      toast({
-        title: "Error",
-        description: "Failed to export chat session",
-        variant: "destructive",
-      });
-    }
+    toast({
+      title: "Export complete",
+      description: "Chat exported as Markdown file",
+    });
   };
 
   const saveToLedger = async (messageId: string, content: string) => {
-    console.log('[LEDGER] Function called with:', { messageId, content: content?.substring(0, 50) });
-    
-    if (!messageId) {
-      console.error('[LEDGER] No messageId provided!');
-      toast({
-        title: "Error",
-        description: "No message ID found",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (!content) {
-      console.error('[LEDGER] No content provided!');
-      toast({
-        title: "Error",
-        description: "No content to save",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     try {
-      setLoading(true);
-      
-      console.log('[LEDGER] Supabase client status:', { 
-        clientExists: !!supabase, 
-        functionsExists: !!supabase?.functions 
-      });
-      
-      console.log('[LEDGER] Starting save to ledger...', { messageId, contentLength: content.length });
-      
-      // Determine agent_id based on current AI model
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
       const message = messages.find(m => m.id === messageId);
-      let agentId = 'ME'; // Default for user messages
+      const agentId = message?.ai_model || 'user';
       
-      if (message?.ai_model === 'chatgpt') agentId = 'GP';
-      else if (message?.ai_model === 'claude') agentId = 'CL';
-      else if (message?.ai_model === 'deepseek') agentId = 'DS';
-      
-      // Create the payload
-      const payload = {
-        agent_id: agentId,
-        entry_type: 'anchor_memory',
-        body_json: {
-          id: currentSessionId || 'unknown',
-          t: new Date().toISOString(),
-          actor: user?.id || 'anonymous',
-          summary: content.substring(0, 100) + (content.length > 100 ? '...' : ''),
-          content: content,
-          message_id: messageId
+      const response = await fetch(
+        `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/save-to-ledger`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            content,
+            agentId,
+            entryType: 'pin',
+            shared: false
+          }),
         }
-      };
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to save to ledger');
+      }
+
+      const result = await response.json();
       
-      console.log('[LEDGER] Payload created:', payload);
-      
-      // Call the save-to-ledger edge function
-      const { data, error } = await supabase.functions.invoke('save-to-ledger', {
-        body: payload
-      });
-      
-      console.log('[LEDGER] Response received:', { data, error });
-      
-      if (error) throw error;
-      
-      // Update the message with ledger info
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
-          ? { 
-              ...msg, 
-              ledger: {
-                entry_id: data.ledger_entry_id,
-                body_hash: data.body_hash,
-                prev_hash: data.prev_hash
-              }
-            }
+          ? { ...msg, ledger: { entry_id: result.id, body_hash: result.body_hash, prev_hash: result.prev_hash } }
           : msg
       ));
-      
+
+      setPinQueue(prev => prev.filter(p => p.messageId !== messageId));
+
       toast({
-        title: "✅ Memory Anchored",
-        description: `Hash: ${data.body_hash.substring(0, 16)}...`,
+        title: "Saved to Memory Ledger",
+        description: `Hash: ${result.body_hash.substring(0, 8)}...`,
       });
-      
-  } catch (error) {
-    console.error('[LEDGER] Full error object:', error);
-    console.error('[LEDGER] Error name:', (error as any)?.name);
-    console.error('[LEDGER] Error message:', (error as any)?.message);
-    console.error('[LEDGER] Error stack:', (error as any)?.stack);
-    
-    toast({
-      title: "Error",
-      description: error instanceof Error ? `${error.name}: ${error.message}` : "Failed to save to ledger",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error) {
+      console.error('Error saving to ledger:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save to ledger",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSend = async () => {
-    if (!input.trim() || loading || !currentSessionId) return;
-
-    // Check usage limits for non-subscribers
-    if (!canSendMessage) {
+    if (!input.trim() || !currentSessionId || loading) return;
+    
+    if (!subscribed && !canSendMessage) {
       toast({
         title: "Daily limit reached",
-        description: `You've reached your daily limit of ${DAILY_MESSAGE_LIMIT} messages. Subscribe for unlimited access.`,
+        description: "Please subscribe for unlimited messages",
         variant: "destructive",
       });
       return;
@@ -1046,34 +931,19 @@ export default function ChatInterface() {
     setLoading(true);
 
     try {
-      // Increment usage count for non-subscribers
-      if (!subscribed) {
-        const canContinue = await incrementUsage();
-        if (!canContinue) {
-          toast({
-            title: "Daily limit reached",
-            description: `You've reached your daily limit of ${DAILY_MESSAGE_LIMIT} messages. Subscribe for unlimited access.`,
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
+      const savedUserMessage = await saveMessage(message, 'user', undefined, selectedAI);
+      if (savedUserMessage) {
+        setMessages(prev => [...prev, savedUserMessage]);
       }
 
-      // Save user message with target AI information
-      const targetAI = selectedAI === "all" ? "all" : selectedAI as SpecificAI;
-      await saveMessage(message, 'user', undefined, targetAI);
-      await loadMessages(currentSessionId);
-
-      // Update session title if it's the first message
       if (messages.length === 0) {
-        const title = message.length > 30 ? message.substring(0, 30) + "..." : message;
-        await updateSessionTitle(currentSessionId, title);
+        const title = message.substring(0, 50) + (message.length > 50 ? '...' : '');
+        updateSessionTitle(currentSessionId, title);
       }
 
       if (selectedAI === "all") {
-        // Call all AIs in parallel
-        const aiPromises = (["chatgpt", "claude", "deepseek"] as SpecificAI[]).map(async (ai) => {
+        const ais: SpecificAI[] = ["chatgpt", "claude", "deepseek"];
+        const aiPromises = ais.map(async (ai) => {
           try {
             const reply = await callAI(ai, message);
             const replyContent = typeof reply === 'string' ? reply : reply.reply;
@@ -1081,27 +951,20 @@ export default function ChatInterface() {
             
             const savedMessage = await saveMessage(replyContent, 'assistant', ai);
             
-            // If streaming (has tempId), replace temp message
             if (tempId && savedMessage) {
               setMessages(prev => prev.map(msg => 
                 msg.id === tempId ? savedMessage : msg
               ));
             }
-            
-            return { ai, reply: replyContent, success: true };
           } catch (error) {
             console.error(`Error with ${ai}:`, error);
-            const errorMsg = `Error: ${error.message}`;
-            await saveMessage(errorMsg, 'assistant', ai);
-            return { ai, reply: errorMsg, success: false };
+            await saveMessage(`Error: ${(error as Error).message}`, 'assistant', ai);
           }
         });
-
+        
         await Promise.all(aiPromises);
-        // Only reload for non-streaming responses
         await loadMessages(currentSessionId);
       } else {
-        // Call specific AI
         try {
           const reply = await callAI(selectedAI as SpecificAI, message);
           const replyContent = typeof reply === 'string' ? reply : reply.reply;
@@ -1109,18 +972,16 @@ export default function ChatInterface() {
           
           const savedMessage = await saveMessage(replyContent, 'assistant', selectedAI as SpecificAI);
           
-          // If streaming (has tempId), replace temp message with saved one
           if (tempId && savedMessage) {
             setMessages(prev => prev.map(msg => 
               msg.id === tempId ? savedMessage : msg
             ));
           } else {
-            // For non-streaming, reload messages
             await loadMessages(currentSessionId);
           }
         } catch (error) {
           console.error(`Error with ${selectedAI}:`, error);
-          await saveMessage(`Error: ${error.message}`, 'assistant', selectedAI as SpecificAI);
+          await saveMessage(`Error: ${(error as Error).message}`, 'assistant', selectedAI as SpecificAI);
           await loadMessages(currentSessionId);
         }
       }
@@ -1136,8 +997,433 @@ export default function ChatInterface() {
     }
   };
 
+  // Sidebar Content Component (reused for both desktop and mobile)
+  const SidebarContent = ({ tab }: { tab: string }) => {
+    switch (tab) {
+      case 'chats':
+        return (
+          <ScrollArea className="h-full">
+            <div className="p-2">
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={cn(
+                    "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
+                    currentSessionId === session.id 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'hover:bg-card/80'
+                  )}
+                  onClick={() => {
+                    setCurrentSessionId(session.id);
+                    setMobileDrawerTab(null);
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center min-w-0 flex-1">
+                      <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
+                      <span className="truncate text-sm">{session.title}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(session.id);
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        );
+      case 'knowledge':
+        return (
+          <div className="p-2 h-full">
+            <KnowledgeManager 
+              knowledgeBase={knowledgeBase} 
+              onRefresh={loadKnowledgeBase}
+            />
+          </div>
+        );
+      case 'research':
+        return (
+          <div className="p-2 h-full">
+            <ResearchLibrary />
+          </div>
+        );
+      case 'memories':
+        return (
+          <LedgerSearcher
+            onAttachEntry={handleAttachLedgerEntry}
+            attachedEntryIds={attachedLedgerEntries.map(e => e.id)}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Message Component
+  const MessageItem = ({ message }: { message: Message }) => (
+    <div
+      className={cn(
+        "flex gap-2 md:gap-3",
+        message.role === 'user' ? "justify-end" : "justify-start"
+      )}
+    >
+      {message.role === 'assistant' && message.ai_model && (
+        <div className={cn(
+          "w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-medium flex-shrink-0",
+          message.ai_model === "chatgpt" && "bg-chatgpt text-chatgpt-foreground",
+          message.ai_model === "claude" && "bg-claude text-claude-foreground", 
+          message.ai_model === "deepseek" && "bg-deepseek text-deepseek-foreground"
+        )}>
+          {AI_CONFIGS[message.ai_model].icon}
+        </div>
+      )}
+      
+      <Card className={cn(
+        "p-2 md:p-3 max-w-[85%] md:max-w-2xl",
+        message.role === 'user' 
+          ? "bg-primary text-primary-foreground ml-auto" 
+          : "bg-card"
+      )}>
+        {message.role === 'assistant' && message.ai_model && (
+          <Badge 
+            className={cn(
+              "mb-1.5 md:mb-2 text-xs",
+              message.ai_model === "chatgpt" && "bg-chatgpt/20 text-chatgpt border-chatgpt/30",
+              message.ai_model === "claude" && "bg-claude/20 text-claude border-claude/30",
+              message.ai_model === "deepseek" && "bg-deepseek/20 text-deepseek border-deepseek/30"
+            )}
+          >
+            {AI_CONFIGS[message.ai_model].name}
+          </Badge>
+        )}
+        <div className="flex items-start justify-between gap-2">
+          {message.role === 'assistant' ? (
+            <div className="text-xs md:text-sm prose prose-sm dark:prose-invert max-w-none flex-1">
+              <Markdown
+                components={{
+                  p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                  h1: ({node, ...props}) => <h1 className="text-base md:text-lg font-semibold mt-4 mb-2 first:mt-0" {...props} />,
+                  h2: ({node, ...props}) => <h2 className="text-sm md:text-base font-semibold mt-3 mb-2 first:mt-0" {...props} />,
+                  h3: ({node, ...props}) => <h3 className="text-xs md:text-sm font-semibold mt-3 mb-2 first:mt-0" {...props} />,
+                  ul: ({node, ...props}) => <ul className="list-disc pl-4 md:pl-6 my-2 space-y-1" {...props} />,
+                  ol: ({node, ...props}) => <ol className="list-decimal pl-4 md:pl-6 my-2 space-y-1" {...props} />,
+                  li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+                  code: ({node, className, children, ...props}: any) => {
+                    const isInline = !className?.includes('language-');
+                    return isInline 
+                      ? <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>
+                      : <code className="block bg-muted p-2 md:p-3 rounded-lg overflow-x-auto text-xs font-mono" {...props}>{children}</code>;
+                  },
+                  blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary pl-3 md:pl-4 italic my-2 text-muted-foreground" {...props} />,
+                  strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
+                  em: ({node, ...props}) => <em className="italic" {...props} />,
+                }}
+              >
+                {message.content}
+              </Markdown>
+            </div>
+          ) : (
+            <p className="text-xs md:text-sm whitespace-pre-wrap flex-1">{message.content}</p>
+          )}
+          {message.role === 'assistant' && message.ai_model && !isMobile && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0">
+                  <Forward className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-card border-border z-[100]">
+                {Object.entries(AI_CONFIGS)
+                  .filter(([key]) => key !== 'all' && key !== message.ai_model)
+                  .map(([key, config]) => (
+                    <DropdownMenuItem
+                      key={key}
+                      onClick={() => forwardMessage(message.content, message.ai_model!, key as SpecificAI)}
+                      className="gap-2"
+                    >
+                      <span>{config.icon}</span>
+                      Forward to {config.name}
+                    </DropdownMenuItem>
+                  ))}
+                {!message.ledger && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const content = message.content.includes('📍') 
+                        ? message.content.substring(message.content.indexOf('📍') + 1, message.content.indexOf('📍') + 151).trim()
+                        : message.content.substring(0, 150);
+                      
+                      setPinQueue(prev => {
+                        const alreadyQueued = prev.some(p => p.messageId === message.id);
+                        if (alreadyQueued) return prev;
+                        return [...prev, { messageId: message.id, content }];
+                      });
+                    }}
+                    className="gap-2"
+                  >
+                    📍 Save to Ledger
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+        {message.ledger && (
+          <div className="mt-2 pt-2 border-t border-border/50">
+            <Badge 
+              variant="outline" 
+              className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
+              onClick={() => {
+                navigator.clipboard.writeText(message.ledger!.body_hash);
+                toast({
+                  title: "Hash copied",
+                  description: "Body hash copied to clipboard",
+                });
+              }}
+            >
+              🔗 {message.ledger.body_hash.substring(0, 8)}...
+            </Badge>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+
+  // Input Area Component
+  const InputArea = () => (
+    <div className={cn(
+      "p-3 md:p-4 border-t border-border bg-card/80 backdrop-blur-sm",
+      isMobile && "pb-20" // Extra padding for bottom nav
+    )}>
+      {/* Attached items */}
+      {(attachedKnowledge.length > 0 || attachedFiles.length > 0 || attachedLedgerEntries.length > 0) && (
+        <div className="mb-3 p-2 bg-muted/50 rounded-lg">
+          <div className="text-xs text-muted-foreground mb-1.5">Context attached:</div>
+          <div className="flex flex-wrap gap-1">
+            {attachedKnowledge.map((item) => (
+              <Badge key={item.id} variant="outline" className="text-xs group">
+                📚 {item.title.substring(0, 15)}...
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                  onClick={() => removeAttachedKnowledge(item.id)}
+                >
+                  <X className="w-2 h-2" />
+                </Button>
+              </Badge>
+            ))}
+            {attachedFiles.map((file) => (
+              <Badge key={file.id} variant="outline" className="text-xs group">
+                <File className="w-3 h-3 mr-1" />
+                {file.filename.substring(0, 12)}...
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                  onClick={() => removeAttachedFile(file.id)}
+                >
+                  <X className="w-2 h-2" />
+                </Button>
+              </Badge>
+            ))}
+            {attachedLedgerEntries.map((entry) => (
+              <Badge key={entry.id} variant="outline" className="text-xs group bg-purple-500/10 border-purple-500/30">
+                🧠 {entry.type}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                  onClick={() => removeAttachedLedgerEntry(entry.id)}
+                >
+                  <X className="w-2 h-2" />
+                </Button>
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+          accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
+        />
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={!currentSessionId}
+          className="shrink-0 h-10 w-10 p-0"
+        >
+          <Paperclip className="w-4 h-4" />
+        </Button>
+        
+        <Textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          placeholder={currentSessionId ? `Message ${selectedAI === "all" ? "all AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}...` : "Create or select a session"}
+          disabled={loading || !currentSessionId}
+          className="flex-1 bg-input border-border focus:ring-ring min-h-[40px] max-h-[100px] resize-none overflow-y-auto text-sm"
+          rows={1}
+        />
+        <Button 
+          onClick={handleSend} 
+          disabled={loading || !input.trim() || !currentSessionId}
+          className="bg-primary hover:bg-primary/90 h-10 w-10 p-0"
+        >
+          {loading ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
+      
+      {/* Status badges */}
+      <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+        <Badge variant="secondary" className="text-xs">
+          {selectedAI === "all" ? "All AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}
+        </Badge>
+        
+        {!subscribed && (
+          <Badge 
+            variant={remainingMessages <= 5 ? "destructive" : "outline"} 
+            className="text-xs"
+          >
+            {remainingMessages === Infinity 
+              ? "Unlimited" 
+              : `${remainingMessages}/${DAILY_MESSAGE_LIMIT} left`
+            }
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+
+  // Pin Queue Modal (simplified for both)
+  const PinQueueModal = () => {
+    if (pinQueue.length === 0) return null;
+    const currentPin = pinQueue[0];
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Card className="p-4 max-w-md w-full">
+          <h3 className="font-semibold mb-2">Save to Memory Ledger?</h3>
+          <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
+            "{currentPin.content}"
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setPinQueue(prev => prev.slice(1))}>
+              Skip
+            </Button>
+            <Button onClick={() => saveToLedger(currentPin.messageId, currentPin.content)}>
+              Save
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
+  // MOBILE LAYOUT
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-[calc(100vh-80px)] bg-gradient-primary">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between p-3 border-b border-border bg-card/50 backdrop-blur-sm">
+          <MobileAISelector selectedAI={selectedAI} onSelect={setSelectedAI} />
+          
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Switch 
+                id="web-search-mobile"
+                checked={webSearchEnabled}
+                onCheckedChange={(checked) => {
+                  setWebSearchEnabled(checked);
+                  localStorage.setItem('webSearchEnabled', String(checked));
+                }}
+                className="scale-90"
+              />
+              <span className="text-xs">🌐</span>
+            </div>
+            
+            {currentSessionId && (
+              <Button variant="ghost" size="sm" onClick={exportChatSession} className="h-8 w-8 p-0">
+                <Download className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-hidden">
+          {!currentSessionId ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground p-4">
+              <div className="text-center">
+                <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">Tap + to start a new chat</p>
+              </div>
+            </div>
+          ) : (
+            <div ref={messagesContainerRef} className="h-full overflow-y-auto p-3 space-y-3">
+              {messages.map((message) => (
+                <MessageItem key={message.id} message={message} />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Input Area */}
+        <InputArea />
+
+        {/* Bottom Navigation */}
+        <MobileBottomNav 
+          activeTab={mobileDrawerTab}
+          onTabChange={setMobileDrawerTab}
+          onNewChat={createNewSession}
+        />
+
+        {/* Mobile Drawer */}
+        <Drawer open={mobileDrawerTab !== null} onOpenChange={(open) => !open && setMobileDrawerTab(null)}>
+          <DrawerContent className="max-h-[70vh]">
+            <DrawerHeader className="pb-2">
+              <DrawerTitle className="capitalize">{mobileDrawerTab}</DrawerTitle>
+            </DrawerHeader>
+            <div className="flex-1 overflow-hidden px-4 pb-4">
+              {mobileDrawerTab && <SidebarContent tab={mobileDrawerTab} />}
+            </div>
+          </DrawerContent>
+        </Drawer>
+
+        <PinQueueModal />
+      </div>
+    );
+  }
+
+  // DESKTOP LAYOUT
   return (
-    <div className="flex h-screen bg-gradient-primary">
+    <div className="flex h-[calc(100vh-120px)] bg-gradient-primary">
       <ResizablePanelGroup direction="horizontal" className="min-h-0">
         {/* Sidebar */}
         <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
@@ -1169,62 +1455,19 @@ export default function ChatInterface() {
               </TabsList>
               
               <TabsContent value="chats" className="flex-1 mt-0">
-                <ScrollArea className="h-full">
-                  <div className="p-2">
-                    {sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className={cn(
-                          "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
-                          currentSessionId === session.id 
-                            ? 'bg-primary text-primary-foreground' 
-                            : 'hover:bg-card/80'
-                        )}
-                        onClick={() => setCurrentSessionId(session.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center min-w-0 flex-1">
-                            <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                            <span className="truncate text-sm">{session.title}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteSession(session.id);
-                            }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+                <SidebarContent tab="chats" />
               </TabsContent>
               
               <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden">
-                <div className="p-2 h-full">
-                  <KnowledgeManager 
-                    knowledgeBase={knowledgeBase} 
-                    onRefresh={loadKnowledgeBase}
-                  />
-                </div>
+                <SidebarContent tab="knowledge" />
               </TabsContent>
 
               <TabsContent value="research" className="flex-1 mt-0 overflow-hidden">
-                <div className="p-2 h-full">
-                  <ResearchLibrary />
-                </div>
+                <SidebarContent tab="research" />
               </TabsContent>
 
               <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden">
-                <LedgerSearcher
-                  onAttachEntry={handleAttachLedgerEntry}
-                  attachedEntryIds={attachedLedgerEntries.map(e => e.id)}
-                />
+                <SidebarContent tab="memories" />
               </TabsContent>
             </Tabs>
           </div>
@@ -1312,382 +1555,32 @@ export default function ChatInterface() {
               </label>
             </div>
 
-        {/* Messages */}
-        <div className="flex-1 p-4 flex flex-col overflow-hidden">
-          {!currentSessionId ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Select a chat session or create a new one to start chatting</p>
-              </div>
-            </div>
-          ) : (
-            <div ref={messagesContainerRef} className="space-y-4 max-w-4xl mx-auto overflow-y-auto flex-1">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex gap-3",
-                    message.role === 'user' ? "justify-end" : "justify-start"
-                  )}
-                >
-                  {message.role === 'assistant' && message.ai_model && (
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
-                      message.ai_model === "chatgpt" && "bg-chatgpt text-chatgpt-foreground",
-                      message.ai_model === "claude" && "bg-claude text-claude-foreground", 
-                      message.ai_model === "deepseek" && "bg-deepseek text-deepseek-foreground"
-                    )}>
-                      {AI_CONFIGS[message.ai_model].icon}
-                    </div>
-                  )}
-                  
-                  <Card className={cn(
-                    "p-3 max-w-2xl",
-                    message.role === 'user' 
-                      ? "bg-primary text-primary-foreground ml-auto" 
-                      : "bg-card"
-                  )}>
-                    {message.role === 'assistant' && message.ai_model && (
-                      <Badge 
-                        className={cn(
-                          "mb-2 text-xs",
-                          message.ai_model === "chatgpt" && "bg-chatgpt/20 text-chatgpt border-chatgpt/30",
-                          message.ai_model === "claude" && "bg-claude/20 text-claude border-claude/30",
-                          message.ai_model === "deepseek" && "bg-deepseek/20 text-deepseek border-deepseek/30"
-                        )}
-                      >
-                        {AI_CONFIGS[message.ai_model].name}
-                      </Badge>
-                     )}
-                      <div className="flex items-start justify-between gap-2">
-                        {message.role === 'assistant' ? (
-                          <div className="text-sm prose prose-sm dark:prose-invert max-w-none flex-1 
-                            prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2
-                            prose-h1:text-lg prose-h2:text-base prose-h3:text-sm
-                            prose-p:my-2 prose-p:leading-relaxed
-                            prose-ul:my-2 prose-ul:list-disc prose-ul:pl-4
-                            prose-ol:my-2 prose-ol:list-decimal prose-ol:pl-4
-                            prose-li:my-1
-                            prose-strong:font-semibold prose-strong:text-foreground
-                            prose-em:italic
-                            prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
-                            prose-pre:bg-muted prose-pre:p-3 prose-pre:rounded-lg prose-pre:overflow-x-auto
-                            prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic
-                            prose-a:text-primary prose-a:underline">
-                            <Markdown
-                              components={{
-                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                                h1: ({node, ...props}) => <h1 className="text-lg font-semibold mt-4 mb-2 first:mt-0" {...props} />,
-                                h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-3 mb-2 first:mt-0" {...props} />,
-                                h3: ({node, ...props}) => <h3 className="text-sm font-semibold mt-3 mb-2 first:mt-0" {...props} />,
-                                ul: ({node, ...props}) => <ul className="list-disc pl-6 my-2 space-y-1" {...props} />,
-                                ol: ({node, ...props}) => <ol className="list-decimal pl-6 my-2 space-y-1" {...props} />,
-                                li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
-                                code: ({node, className, children, ...props}: any) => {
-                                  const isInline = !className?.includes('language-');
-                                  return isInline 
-                                    ? <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props}>{children}</code>
-                                    : <code className="block bg-muted p-3 rounded-lg overflow-x-auto text-sm font-mono" {...props}>{children}</code>;
-                                },
-                                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary pl-4 italic my-2 text-muted-foreground" {...props} />,
-                                strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
-                                em: ({node, ...props}) => <em className="italic" {...props} />,
-                              }}
-                            >
-                              {message.content}
-                            </Markdown>
-                          </div>
-                        ) : (
-                          <p className="text-sm whitespace-pre-wrap flex-1">{message.content}</p>
-                        )}
-                       {message.role === 'assistant' && message.ai_model && (
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0">
-                               <Forward className="h-3 w-3" />
-                             </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent align="end">
-                             {Object.entries(AI_CONFIGS)
-                               .filter(([key]) => key !== 'all' && key !== message.ai_model)
-                               .map(([key, config]) => (
-                                 <DropdownMenuItem
-                                   key={key}
-                                   onClick={() => forwardMessage(message.content, message.ai_model!, key as SpecificAI)}
-                                   className="gap-2"
-                                 >
-                                   <span>{config.icon}</span>
-                                   Forward to {config.name}
-                                 </DropdownMenuItem>
-                               ))}
-                              {!message.ledger && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const content = message.content.includes('📍') 
-                                      ? message.content.substring(message.content.indexOf('📍') + 1, message.content.indexOf('📍') + 151).trim()
-                                      : message.content.substring(0, 150);
-                                    
-                                    // Add to queue
-                                    setPinQueue(prev => {
-                                      const alreadyQueued = prev.some(p => p.messageId === message.id);
-                                      if (alreadyQueued) return prev;
-                                      
-                                      return [...prev, { messageId: message.id, content }];
-                                    });
-                                  }}
-                                  className="gap-2"
-                                >
-                                  📍 Save to Ledger
-                                </DropdownMenuItem>
-                              )}
-                           </DropdownMenuContent>
-                         </DropdownMenu>
-                       )}
-                     </div>
-                     {message.ledger && (
-                       <div className="mt-2 pt-2 border-t border-border/50">
-                         <div className="flex items-center gap-2">
-                           <Badge 
-                             variant="outline" 
-                             className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                             onClick={() => {
-                               navigator.clipboard.writeText(message.ledger!.body_hash);
-                               toast({
-                                 title: "Hash copied",
-                                 description: "Cryptographic hash copied to clipboard",
-                               });
-                             }}
-                           >
-                             ✅ Ledger: {message.ledger.body_hash.substring(0, 8)}...{message.ledger.body_hash.substring(message.ledger.body_hash.length - 6)}
-                           </Badge>
-                           <span className="text-xs text-muted-foreground">
-                             (click to copy)
-                           </span>
-                         </div>
-                       </div>
-                     )}
-                     <p className="text-xs text-muted-foreground mt-1">
-                       {new Date(message.created_at).toLocaleTimeString()}
-                     </p>
-                  </Card>
-                </div>
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <Card className="p-3 bg-card">
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                      <span className="text-muted-foreground text-sm">AI is thinking...</span>
-                    </div>
-                  </Card>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Pin Prompt - Non-Blocking Docked Card */}
-        {pinQueue.length > 0 && (
-          <Card className="fixed bottom-20 right-4 w-80 md:w-96 max-h-[400px] z-50 shadow-lg border-2 border-primary/50 bg-card backdrop-blur-md animate-in slide-in-from-bottom-4">
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-2xl">📍</span>
-                <h3 className="font-semibold text-sm">Anchor this memory to the blockchain?</h3>
-                {pinQueue.length > 1 && (
-                  <Badge variant="secondary" className="text-xs ml-auto">
-                    {pinQueue.length} queued
-                  </Badge>
-                )}
-              </div>
-              <ScrollArea className="max-h-32 mb-4">
-                <p className="text-sm text-muted-foreground pr-4">
-                  {pinQueue[0]?.content}
-                </p>
-              </ScrollArea>
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setPinQueue(prev => prev.slice(1));
-                  }}
-                >
-                  {pinQueue.length > 1 ? 'Skip (Next)' : 'Skip'}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    if (pinQueue[0]) {
-                      await saveToLedger(pinQueue[0].messageId, pinQueue[0].content);
-                      setPinQueue(prev => prev.slice(1));
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  Save to Ledger
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Input */}
-        <div className="p-4 border-t border-border bg-card/50 backdrop-blur-sm">
-          <div className="max-w-4xl mx-auto">
-            {/* Context Info */}
-            {(attachedKnowledge.length > 0 || attachedFiles.length > 0 || attachedLedgerEntries.length > 0) && (
-              <div className="mb-3 p-2 bg-card border border-border rounded-lg">
-                <div className="text-xs text-muted-foreground mb-2">Attached to this message:</div>
-                <div className="flex flex-wrap gap-1">
-                  {attachedKnowledge.map((item) => (
-                    <Badge key={item.id} variant="outline" className="text-xs group">
-                      📚 {item.title}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
-                        onClick={() => removeAttachedKnowledge(item.id)}
-                      >
-                        <X className="w-2 h-2" />
-                      </Button>
-                    </Badge>
-                  ))}
-                  {attachedFiles.map((file) => (
-                    <Badge key={file.id} variant="outline" className="text-xs group">
-                      <File className="w-3 h-3 mr-1" />
-                      {file.filename}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
-                        onClick={() => removeAttachedFile(file.id)}
-                      >
-                        <X className="w-2 h-2" />
-                      </Button>
-                    </Badge>
-                  ))}
-                  {attachedLedgerEntries.map((entry) => (
-                    <Badge key={entry.id} variant="outline" className="text-xs group bg-purple-500/10 border-purple-500/30">
-                      🧠 {entry.type} - {entry.agentId}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
-                        onClick={() => removeAttachedLedgerEntry(entry.id)}
-                      >
-                        <X className="w-2 h-2" />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-                
-                {/* Show detached items that can be re-attached */}
-                {(knowledgeBase.length > attachedKnowledge.length || chatFiles.length > attachedFiles.length) && (
-                  <div className="mt-2 pt-2 border-t border-border">
-                    <div className="text-xs text-muted-foreground mb-1">Available to attach:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {knowledgeBase
-                        .filter(item => !attachedKnowledge.find(attached => attached.id === item.id))
-                        .map((item) => (
-                          <Badge 
-                            key={item.id} 
-                            variant="secondary" 
-                            className="text-xs cursor-pointer hover:bg-primary/20"
-                            onClick={() => addBackKnowledge(item)}
-                          >
-                            📚 {item.title}
-                          </Badge>
-                        ))}
-                      {chatFiles
-                        .filter(file => !attachedFiles.find(attached => attached.id === file.id))
-                        .map((file) => (
-                          <Badge 
-                            key={file.id} 
-                            variant="secondary" 
-                            className="text-xs cursor-pointer hover:bg-primary/20"
-                            onClick={() => addBackFile(file)}
-                          >
-                            <File className="w-3 h-3 mr-1" />
-                            {file.filename}
-                          </Badge>
-                        ))}
-                    </div>
+            {/* Messages */}
+            <div className="flex-1 p-4 flex flex-col overflow-hidden">
+              {!currentSessionId ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <div className="text-center">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Select a chat session or create a new one to start chatting</p>
                   </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileSelect}
-                className="hidden"
-                accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
-              />
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!currentSessionId}
-                className="shrink-0"
-              >
-                <Paperclip className="w-4 h-4" />
-              </Button>
-              
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder={currentSessionId ? `Message ${selectedAI === "all" ? "all AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}...` : "Create or select a session to start chatting"}
-                disabled={loading || !currentSessionId}
-                className="flex-1 bg-input border-border focus:ring-ring min-h-[44px] max-h-[120px] resize-none overflow-y-auto"
-                rows={1}
-              />
-              <Button 
-                onClick={handleSend} 
-                disabled={loading || !input.trim() || !currentSessionId}
-                className="bg-primary hover:bg-primary/90"
-              >
-                {loading ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <Badge variant="secondary" className="text-xs">
-                {selectedAI === "all" ? "Broadcasting to all AIs" : `Chatting with ${AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}`}
-              </Badge>
-              
-              {!subscribed && (
-                <Badge 
-                  variant={remainingMessages <= 5 ? "destructive" : "outline"} 
-                  className="text-xs"
-                >
-                  {remainingMessages === Infinity 
-                    ? "Unlimited" 
-                    : `${remainingMessages}/${DAILY_MESSAGE_LIMIT} messages left today`
-                  }
-                </Badge>
+                </div>
+              ) : (
+                <div ref={messagesContainerRef} className="space-y-4 max-w-4xl mx-auto overflow-y-auto flex-1">
+                  {messages.map((message) => (
+                    <MessageItem key={message.id} message={message} />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
               )}
             </div>
-          </div>
-        </div>
+
+            {/* Input Area */}
+            <InputArea />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <PinQueueModal />
     </div>
   );
 }
