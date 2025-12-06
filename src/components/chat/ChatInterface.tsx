@@ -814,7 +814,18 @@ export default function ChatInterface() {
     setAttachedFiles(prev => [...prev, file]);
   };
 
-  const handleAttachLedgerEntry = (entry: LedgerEntry) => {
+  const handleAttachLedgerEntry = (searchEntry: LedgerSearchEntry) => {
+    // Transform from database format to internal format
+    const entry: LedgerEntry = {
+      id: searchEntry.id,
+      content: typeof searchEntry.body_json === 'string' 
+        ? searchEntry.body_json 
+        : JSON.stringify(searchEntry.body_json),
+      agentId: searchEntry.agent_id,
+      type: searchEntry.entry_type,
+      timestamp: searchEntry.created_at,
+    };
+    
     const alreadyAttached = attachedLedgerEntries.some(e => e.id === entry.id);
     if (alreadyAttached) {
       setAttachedLedgerEntries(prev => prev.filter(e => e.id !== entry.id));
