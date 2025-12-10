@@ -1029,45 +1029,43 @@ export default function ChatInterface() {
 
   // Memoized chat list to prevent re-renders
   const ChatList = useMemo(() => (
-    <div className="h-full flex flex-col overflow-hidden">
-      <ScrollArea className="flex-1">
-        <div className="p-2">
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              className={cn(
-                "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
-                currentSessionId === session.id 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'hover:bg-card/80'
-              )}
-              onClick={() => {
-                setCurrentSessionId(session.id);
-                setMobileDrawerTab(null);
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center min-w-0 flex-1">
-                  <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                  <span className="truncate text-sm">{session.title}</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteSession(session.id);
-                  }}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
+    <ScrollArea className="h-[calc(100vh-280px)]">
+      <div className="p-2">
+        {sessions.map((session) => (
+          <div
+            key={session.id}
+            className={cn(
+              "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
+              currentSessionId === session.id 
+                ? 'bg-primary text-primary-foreground' 
+                : 'hover:bg-card/80'
+            )}
+            onClick={() => {
+              setCurrentSessionId(session.id);
+              setMobileDrawerTab(null);
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center min-w-0 flex-1">
+                <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span className="truncate text-sm">{session.title}</span>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteSession(session.id);
+                }}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
             </div>
-          ))}
-        </div>
-      </ScrollArea>
-    </div>
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
   ), [sessions, currentSessionId]);
 
   // Sidebar Content Component (memoized to prevent focus loss)
@@ -1231,132 +1229,6 @@ export default function ChatInterface() {
     </div>
   );
 
-  // Input Area Component
-  const InputArea = () => (
-    <div className={cn(
-      "p-3 md:p-4 border-t border-border bg-card/80 backdrop-blur-sm",
-      isMobile && "pb-20" // Extra padding for bottom nav
-    )}>
-      {/* Attached items */}
-      {(attachedKnowledge.length > 0 || attachedFiles.length > 0 || attachedLedgerEntries.length > 0) && (
-        <div className="mb-3 p-2 bg-muted/50 rounded-lg">
-          <div className="text-xs text-muted-foreground mb-1.5">Context attached:</div>
-          <div className="flex flex-wrap gap-1">
-            {attachedKnowledge.map((item) => (
-              <Badge key={item.id} variant="outline" className="text-xs group">
-                📚 {item.title.substring(0, 15)}...
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
-                  onClick={() => removeAttachedKnowledge(item.id)}
-                >
-                  <X className="w-2 h-2" />
-                </Button>
-              </Badge>
-            ))}
-            {attachedFiles.map((file) => (
-              <Badge key={file.id} variant="outline" className="text-xs group">
-                <File className="w-3 h-3 mr-1" />
-                {file.filename.substring(0, 12)}...
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
-                  onClick={() => removeAttachedFile(file.id)}
-                >
-                  <X className="w-2 h-2" />
-                </Button>
-              </Badge>
-            ))}
-            {attachedLedgerEntries.map((entry) => (
-              <Badge key={entry.id} variant="outline" className="text-xs group bg-purple-500/10 border-purple-500/30">
-                🧠 {entry.type}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
-                  onClick={() => removeAttachedLedgerEntry(entry.id)}
-                >
-                  <X className="w-2 h-2" />
-                </Button>
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileSelect}
-          className="hidden"
-          accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
-        />
-        
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!currentSessionId}
-          className="shrink-0 h-10 w-10 p-0"
-        >
-          <Paperclip className="w-4 h-4" />
-        </Button>
-        
-        <Textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-          placeholder={currentSessionId ? `Message ${selectedAI === "all" ? "all AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}...` : "Create or select a session"}
-          disabled={loading || !currentSessionId}
-          className="flex-1 bg-input border-border focus:ring-ring min-h-[40px] max-h-[100px] resize-none overflow-y-auto text-sm"
-          rows={1}
-        />
-        <Button 
-          onClick={loading ? handleStop : handleSend} 
-          disabled={!loading && (!input.trim() || !currentSessionId)}
-          className={cn(
-            "h-10 w-10 p-0",
-            loading ? "bg-destructive hover:bg-destructive/90" : "bg-primary hover:bg-primary/90"
-          )}
-        >
-          {loading ? (
-            <Square className="w-4 h-4 fill-current" />
-          ) : (
-            <Send className="w-4 h-4" />
-          )}
-        </Button>
-      </div>
-      
-      {/* Status badges */}
-      <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
-        <Badge variant="secondary" className="text-xs">
-          {selectedAI === "all" ? "All AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}
-        </Badge>
-        
-        {!subscribed && (
-          <Badge 
-            variant={remainingMessages <= 5 ? "destructive" : "outline"} 
-            className="text-xs"
-          >
-            {remainingMessages === Infinity 
-              ? "Unlimited" 
-              : `${remainingMessages}/${DAILY_MESSAGE_LIMIT} left`
-            }
-          </Badge>
-        )}
-      </div>
-    </div>
-  );
 
   // Pin Queue Modal (simplified for both)
   const PinQueueModal = () => {
@@ -1433,7 +1305,122 @@ export default function ChatInterface() {
         </div>
 
         {/* Input Area */}
-        <InputArea />
+        <div className={cn(
+          "p-3 md:p-4 border-t border-border bg-card/80 backdrop-blur-sm",
+          isMobile && "pb-20"
+        )}>
+          {(attachedKnowledge.length > 0 || attachedFiles.length > 0 || attachedLedgerEntries.length > 0) && (
+            <div className="mb-3 p-2 bg-muted/50 rounded-lg">
+              <div className="text-xs text-muted-foreground mb-1.5">Context attached:</div>
+              <div className="flex flex-wrap gap-1">
+                {attachedKnowledge.map((item) => (
+                  <Badge key={item.id} variant="outline" className="text-xs group">
+                    📚 {item.title.substring(0, 15)}...
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                      onClick={() => removeAttachedKnowledge(item.id)}
+                    >
+                      <X className="w-2 h-2" />
+                    </Button>
+                  </Badge>
+                ))}
+                {attachedFiles.map((file) => (
+                  <Badge key={file.id} variant="outline" className="text-xs group">
+                    <File className="w-3 h-3 mr-1" />
+                    {file.filename.substring(0, 12)}...
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                      onClick={() => removeAttachedFile(file.id)}
+                    >
+                      <X className="w-2 h-2" />
+                    </Button>
+                  </Badge>
+                ))}
+                {attachedLedgerEntries.map((entry) => (
+                  <Badge key={entry.id} variant="outline" className="text-xs group bg-purple-500/10 border-purple-500/30">
+                    🧠 {entry.type}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                      onClick={() => removeAttachedLedgerEntry(entry.id)}
+                    >
+                      <X className="w-2 h-2" />
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+              accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!currentSessionId}
+              className="shrink-0 h-10 w-10 p-0"
+            >
+              <Paperclip className="w-4 h-4" />
+            </Button>
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={currentSessionId ? `Message ${selectedAI === "all" ? "all AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}...` : "Create or select a session"}
+              disabled={loading || !currentSessionId}
+              className="flex-1 bg-input border-border focus:ring-ring min-h-[40px] max-h-[100px] resize-none overflow-y-auto text-sm"
+              rows={1}
+            />
+            <Button 
+              onClick={loading ? handleStop : handleSend} 
+              disabled={!loading && (!input.trim() || !currentSessionId)}
+              className={cn(
+                "h-10 w-10 p-0",
+                loading ? "bg-destructive hover:bg-destructive/90" : "bg-primary hover:bg-primary/90"
+              )}
+            >
+              {loading ? (
+                <Square className="w-4 h-4 fill-current" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+          <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+            <Badge variant="secondary" className="text-xs">
+              {selectedAI === "all" ? "All AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}
+            </Badge>
+            {!subscribed && (
+              <Badge 
+                variant={remainingMessages <= 5 ? "destructive" : "outline"} 
+                className="text-xs"
+              >
+                {remainingMessages === Infinity 
+                  ? "Unlimited" 
+                  : `${remainingMessages}/${DAILY_MESSAGE_LIMIT} left`
+                }
+              </Badge>
+            )}
+          </div>
+        </div>
 
         {/* Bottom Navigation */}
         <MobileBottomNav 
@@ -1621,7 +1608,122 @@ export default function ChatInterface() {
             </div>
 
             {/* Input Area */}
-            <InputArea />
+            <div className={cn(
+              "p-3 md:p-4 border-t border-border bg-card/80 backdrop-blur-sm",
+              isMobile && "pb-20"
+            )}>
+              {(attachedKnowledge.length > 0 || attachedFiles.length > 0 || attachedLedgerEntries.length > 0) && (
+                <div className="mb-3 p-2 bg-muted/50 rounded-lg">
+                  <div className="text-xs text-muted-foreground mb-1.5">Context attached:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {attachedKnowledge.map((item) => (
+                      <Badge key={item.id} variant="outline" className="text-xs group">
+                        📚 {item.title.substring(0, 15)}...
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                          onClick={() => removeAttachedKnowledge(item.id)}
+                        >
+                          <X className="w-2 h-2" />
+                        </Button>
+                      </Badge>
+                    ))}
+                    {attachedFiles.map((file) => (
+                      <Badge key={file.id} variant="outline" className="text-xs group">
+                        <File className="w-3 h-3 mr-1" />
+                        {file.filename.substring(0, 12)}...
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                          onClick={() => removeAttachedFile(file.id)}
+                        >
+                          <X className="w-2 h-2" />
+                        </Button>
+                      </Badge>
+                    ))}
+                    {attachedLedgerEntries.map((entry) => (
+                      <Badge key={entry.id} variant="outline" className="text-xs group bg-purple-500/10 border-purple-500/30">
+                        🧠 {entry.type}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-3 w-3 p-0 ml-1 opacity-0 group-hover:opacity-100"
+                          onClick={() => removeAttachedLedgerEntry(entry.id)}
+                        >
+                          <X className="w-2 h-2" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept=".txt,.md,.json,.csv,.pdf,.doc,.docx"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!currentSessionId}
+                  className="shrink-0 h-10 w-10 p-0"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </Button>
+                <Textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder={currentSessionId ? `Message ${selectedAI === "all" ? "all AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}...` : "Create or select a session"}
+                  disabled={loading || !currentSessionId}
+                  className="flex-1 bg-input border-border focus:ring-ring min-h-[40px] max-h-[100px] resize-none overflow-y-auto text-sm"
+                  rows={1}
+                />
+                <Button 
+                  onClick={loading ? handleStop : handleSend} 
+                  disabled={!loading && (!input.trim() || !currentSessionId)}
+                  className={cn(
+                    "h-10 w-10 p-0",
+                    loading ? "bg-destructive hover:bg-destructive/90" : "bg-primary hover:bg-primary/90"
+                  )}
+                >
+                  {loading ? (
+                    <Square className="w-4 h-4 fill-current" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+                <Badge variant="secondary" className="text-xs">
+                  {selectedAI === "all" ? "All AIs" : AI_CONFIGS[selectedAI as keyof typeof AI_CONFIGS]?.name || selectedAI}
+                </Badge>
+                {!subscribed && (
+                  <Badge 
+                    variant={remainingMessages <= 5 ? "destructive" : "outline"} 
+                    className="text-xs"
+                  >
+                    {remainingMessages === Infinity 
+                      ? "Unlimited" 
+                      : `${remainingMessages}/${DAILY_MESSAGE_LIMIT} left`
+                    }
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
