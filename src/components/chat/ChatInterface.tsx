@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useUsageLimit } from '@/hooks/useUsageLimit';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText, Square } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -111,6 +111,7 @@ export default function ChatInterface() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
   const { subscribed } = useSubscription();
   const { canSendMessage, remainingMessages, incrementUsage, DAILY_MESSAGE_LIMIT } = useUsageLimit();
@@ -925,6 +926,18 @@ export default function ChatInterface() {
     }
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setLoading(false);
+      toast({
+        title: "Response stopped",
+        description: "AI output was halted",
+      });
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !currentSessionId || loading) return;
     
@@ -1298,12 +1311,15 @@ export default function ChatInterface() {
           rows={1}
         />
         <Button 
-          onClick={handleSend} 
-          disabled={loading || !input.trim() || !currentSessionId}
-          className="bg-primary hover:bg-primary/90 h-10 w-10 p-0"
+          onClick={loading ? handleStop : handleSend} 
+          disabled={!loading && (!input.trim() || !currentSessionId)}
+          className={cn(
+            "h-10 w-10 p-0",
+            loading ? "bg-destructive hover:bg-destructive/90" : "bg-primary hover:bg-primary/90"
+          )}
         >
           {loading ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <Square className="w-4 h-4 fill-current" />
           ) : (
             <Send className="w-4 h-4" />
           )}
@@ -1465,7 +1481,7 @@ export default function ChatInterface() {
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="chats" className="flex-1 mt-0">
+              <TabsContent value="chats" className="flex-1 mt-0 overflow-hidden">
                 <SidebarContent tab="chats" />
               </TabsContent>
               
@@ -1517,10 +1533,18 @@ export default function ChatInterface() {
                   onClick={() => setSelectedAI("all")}
                   className={cn(
                     "gap-2",
-                    selectedAI === "all" && "bg-gradient-glow"
+                    selectedAI === "all" && "bg-emerald-600 hover:bg-emerald-700 text-white border-0"
                   )}
                 >
-                  <Users className="w-4 h-4" />
+                  <div className={cn(
+                    "rounded-full p-0.5",
+                    selectedAI === "all" && "bg-white"
+                  )}>
+                    <Users className={cn(
+                      "w-4 h-4",
+                      selectedAI === "all" && "text-emerald-600"
+                    )} />
+                  </div>
                   All AIs
                 </Button>
                 {Object.entries(AI_CONFIGS)

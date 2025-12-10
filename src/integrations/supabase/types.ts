@@ -363,8 +363,8 @@ export type Database = {
       compute_canonical_hash: { Args: { data: Json }; Returns: string }
       create_ledger_batch: { Args: { p_entry_ids: string[] }; Returns: string }
       get_daily_usage:
-        | { Args: { p_email?: string; p_user_id?: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }
+        | { Args: { p_email?: string; p_user_id?: string }; Returns: number }
       get_prev_hash: { Args: { p_agent_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -374,8 +374,8 @@ export type Database = {
         Returns: boolean
       }
       increment_daily_usage:
-        | { Args: { p_email?: string; p_user_id?: string }; Returns: number }
         | { Args: { p_user_id: string }; Returns: number }
+        | { Args: { p_email?: string; p_user_id?: string }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"

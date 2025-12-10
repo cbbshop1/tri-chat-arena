@@ -33,11 +33,13 @@ export function MobileAISelector({ selectedAI, onSelect }: MobileAISelectorProps
           size="sm" 
           className={cn(
             "gap-2",
-            selectedAI === "all" && "bg-gradient-glow text-white border-0"
+            selectedAI === "all" && "bg-emerald-600 hover:bg-emerald-700 text-white border-0"
           )}
         >
           {selectedAI === "all" ? (
-            <Users className="w-4 h-4" />
+            <div className="rounded-full p-0.5 bg-white">
+              <Users className="w-4 h-4 text-emerald-600" />
+            </div>
           ) : (
             <span>{currentConfig.icon}</span>
           )}
