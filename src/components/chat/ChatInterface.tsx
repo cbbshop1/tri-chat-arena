@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -1027,51 +1027,54 @@ export default function ChatInterface() {
     }
   };
 
-  // Sidebar Content Component (reused for both desktop and mobile)
-  const SidebarContent = ({ tab }: { tab: string }) => {
+  // Memoized chat list to prevent re-renders
+  const ChatList = useMemo(() => (
+    <div className="h-full flex flex-col overflow-hidden">
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {sessions.map((session) => (
+            <div
+              key={session.id}
+              className={cn(
+                "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
+                currentSessionId === session.id 
+                  ? 'bg-primary text-primary-foreground' 
+                  : 'hover:bg-card/80'
+              )}
+              onClick={() => {
+                setCurrentSessionId(session.id);
+                setMobileDrawerTab(null);
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center min-w-0 flex-1">
+                  <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span className="truncate text-sm">{session.title}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteSession(session.id);
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  ), [sessions, currentSessionId]);
+
+  // Sidebar Content Component (memoized to prevent focus loss)
+  const renderSidebarContent = useCallback((tab: string) => {
     switch (tab) {
       case 'chats':
-        return (
-          <div className="h-full flex flex-col">
-            <ScrollArea className="flex-1">
-              <div className="p-2">
-                {sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={cn(
-                      "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
-                      currentSessionId === session.id 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'hover:bg-card/80'
-                    )}
-                    onClick={() => {
-                      setCurrentSessionId(session.id);
-                      setMobileDrawerTab(null);
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center min-w-0 flex-1">
-                        <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                        <span className="truncate text-sm">{session.title}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSession(session.id);
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        );
+        return ChatList;
       case 'knowledge':
         return (
           <div className="p-2 h-full">
@@ -1097,7 +1100,7 @@ export default function ChatInterface() {
       default:
         return null;
     }
-  };
+  }, [ChatList, knowledgeBase, attachedLedgerEntries]);
 
   // Message Component
   const MessageItem = ({ message }: { message: Message }) => (
@@ -1446,7 +1449,7 @@ export default function ChatInterface() {
               <DrawerTitle className="capitalize">{mobileDrawerTab}</DrawerTitle>
             </DrawerHeader>
             <div className="flex-1 overflow-hidden px-4 pb-4">
-              {mobileDrawerTab && <SidebarContent tab={mobileDrawerTab} />}
+              {mobileDrawerTab && renderSidebarContent(mobileDrawerTab)}
             </div>
           </DrawerContent>
         </Drawer>
@@ -1490,19 +1493,19 @@ export default function ChatInterface() {
               </TabsList>
               
               <TabsContent value="chats" className="flex-1 mt-0 overflow-hidden">
-                <SidebarContent tab="chats" />
+                {renderSidebarContent('chats')}
               </TabsContent>
               
               <TabsContent value="knowledge" className="flex-1 mt-0 overflow-hidden">
-                <SidebarContent tab="knowledge" />
+                {renderSidebarContent('knowledge')}
               </TabsContent>
 
               <TabsContent value="research" className="flex-1 mt-0 overflow-hidden">
-                <SidebarContent tab="research" />
+                {renderSidebarContent('research')}
               </TabsContent>
 
               <TabsContent value="memories" className="flex-1 mt-0 overflow-hidden">
-                <SidebarContent tab="memories" />
+                {renderSidebarContent('memories')}
               </TabsContent>
             </Tabs>
           </div>
