@@ -8,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const VALID_AGENT_IDS = ['C', 'CL', 'DS', 'GP', 'GM', 'LL', 'GK', 'ME', 'MS'];
+// Agent IDs are now flexible - any non-empty string is accepted
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -59,13 +59,13 @@ serve(async (req) => {
     
     const { agent_id, entry_type, body_json } = requestBody;
 
-    // Validate agent_id
-    if (!agent_id || !VALID_AGENT_IDS.includes(agent_id)) {
+    // Validate agent_id - accept any non-empty string
+    if (!agent_id || typeof agent_id !== 'string' || agent_id.trim().length === 0) {
       console.error('[SAVE-TO-LEDGER] Invalid agent_id:', agent_id);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Invalid agent_id. Must be one of: ${VALID_AGENT_IDS.join(', ')}` 
+          error: 'agent_id is required and must be a non-empty string' 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -94,16 +94,16 @@ serve(async (req) => {
       );
     }
 
-    // Check for required fields in body_json
-    const requiredFields = ['id', 't', 'actor', 'summary'];
-    const missingFields = requiredFields.filter(field => !body_json[field]);
+    // Check for required fields in body_json - accept either new format or old format
+    const hasNewFormat = body_json.content && body_json.actor;
+    const hasOldFormat = body_json.id && body_json.t && body_json.actor && body_json.summary;
     
-    if (missingFields.length > 0) {
-      console.error('[SAVE-TO-LEDGER] Missing fields:', missingFields, 'Body JSON:', body_json);
+    if (!hasNewFormat && !hasOldFormat) {
+      console.error('[SAVE-TO-LEDGER] Invalid body_json format:', body_json);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `body_json missing required fields: ${missingFields.join(', ')}` 
+          error: 'body_json must contain either {content, actor} or {id, t, actor, summary}' 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
