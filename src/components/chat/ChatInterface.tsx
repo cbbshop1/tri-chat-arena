@@ -411,6 +411,7 @@ export default function ChatInterface() {
           sessionId: currentSessionId,
           webSearchEnabled: webSearchEnabled
         }),
+        signal: abortControllerRef.current?.signal,
       }
     );
 
@@ -486,6 +487,7 @@ export default function ChatInterface() {
           sessionId: currentSessionId,
           webSearchEnabled: webSearchEnabled
         }),
+        signal: abortControllerRef.current?.signal,
       }
     );
 
@@ -563,6 +565,7 @@ export default function ChatInterface() {
           sessionId: currentSessionId,
           webSearchEnabled: webSearchEnabled
         }),
+        signal: abortControllerRef.current?.signal,
       }
     );
 
@@ -953,6 +956,9 @@ export default function ChatInterface() {
     const message = input.trim();
     setInput("");
     setLoading(true);
+    
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
 
     try {
       const savedUserMessage = await saveMessage(message, 'user', undefined, selectedAI);
@@ -1026,43 +1032,45 @@ export default function ChatInterface() {
     switch (tab) {
       case 'chats':
         return (
-          <ScrollArea className="h-full">
-            <div className="p-2">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={cn(
-                    "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
-                    currentSessionId === session.id 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'hover:bg-card/80'
-                  )}
-                  onClick={() => {
-                    setCurrentSessionId(session.id);
-                    setMobileDrawerTab(null);
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center min-w-0 flex-1">
-                      <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
-                      <span className="truncate text-sm">{session.title}</span>
+          <div className="h-full flex flex-col">
+            <ScrollArea className="flex-1">
+              <div className="p-2">
+                {sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className={cn(
+                      "p-3 mb-2 rounded-lg cursor-pointer transition-colors group",
+                      currentSessionId === session.id 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'hover:bg-card/80'
+                    )}
+                    onClick={() => {
+                      setCurrentSessionId(session.id);
+                      setMobileDrawerTab(null);
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center min-w-0 flex-1">
+                        <MessageSquare className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <span className="truncate text-sm">{session.title}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteSession(session.id);
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 ml-2 h-6 w-6 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(session.id);
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
         );
       case 'knowledge':
         return (
