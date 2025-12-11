@@ -750,9 +750,7 @@ export default function ChatInterface() {
     }
   }, [currentSessionId]);
 
-  useEffect(() => {
-    setAttachedKnowledge(knowledgeBase);
-  }, [knowledgeBase]);
+  // Knowledge items start empty - users manually attach what they want
 
   useEffect(() => {
     setAttachedFiles(chatFiles);
@@ -878,38 +876,29 @@ export default function ChatInterface() {
 
   const saveToLedger = async (messageId: string, content: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
 
       const message = messages.find(m => m.id === messageId);
       const agentId = message?.ai_model || 'user';
       
-      const response = await fetch(
-        `https://ywohajmeijjiubesykcu.supabase.co/functions/v1/save-to-ledger`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('save-to-ledger', {
+        body: {
+          agent_id: agentId,
+          entry_type: 'pin',
+          body_json: {
             content,
-            agentId,
-            entryType: 'pin',
-            shared: false
-          }),
+            actor: user.id,
+            timestamp: new Date().toISOString()
+          }
         }
-      );
+      });
 
-      if (!response.ok) {
-        throw new Error('Failed to save to ledger');
-      }
-
-      const result = await response.json();
+      if (error) throw error;
       
       setMessages(prev => prev.map(msg => 
         msg.id === messageId 
-          ? { ...msg, ledger: { entry_id: result.id, body_hash: result.body_hash, prev_hash: result.prev_hash } }
+          ? { ...msg, ledger: { entry_id: data.ledger_entry_id, body_hash: data.body_hash, prev_hash: data.prev_hash } }
           : msg
       ));
 
@@ -917,7 +906,7 @@ export default function ChatInterface() {
 
       toast({
         title: "Saved to Memory Ledger",
-        description: `Hash: ${result.body_hash.substring(0, 8)}...`,
+        description: `Hash: ${data.body_hash?.substring(0, 8)}...`,
       });
     } catch (error) {
       console.error('Error saving to ledger:', error);
