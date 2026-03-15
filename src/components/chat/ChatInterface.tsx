@@ -1374,6 +1374,41 @@ export default function ChatInterface() {
             >
               <Paperclip className="w-4 h-4" />
             </Button>
+            <Popover open={knowledgePickerOpen} onOpenChange={setKnowledgePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!currentSessionId || knowledgeBase.length === 0}
+                  className="shrink-0 h-10 w-10 p-0 relative"
+                  title="Attach Knowledge"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  {attachedKnowledge.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] rounded-full h-4 w-4 flex items-center justify-center">
+                      {attachedKnowledge.length}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <div className="text-xs font-medium mb-2 text-muted-foreground">Attach Knowledge</div>
+                <ScrollArea className="max-h-48">
+                  {knowledgeBase.map((item) => (
+                    <label
+                      key={item.id}
+                      className="flex items-center gap-2 p-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={attachedKnowledge.some(k => k.id === item.id)}
+                        onCheckedChange={() => toggleKnowledgeAttachment(item)}
+                      />
+                      <span className="truncate">{item.title}</span>
+                    </label>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
             <Textarea
               ref={textareaRef}
               value={input}
