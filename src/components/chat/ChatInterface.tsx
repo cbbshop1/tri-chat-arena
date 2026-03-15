@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useUsageLimit } from '@/hooks/useUsageLimit';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText, Square } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText, Square, BookOpen } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
