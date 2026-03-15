@@ -107,6 +107,7 @@ export default function ChatInterface() {
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [mobileDrawerTab, setMobileDrawerTab] = useState<MobileTab | null>(null);
+  const [knowledgePickerOpen, setKnowledgePickerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
