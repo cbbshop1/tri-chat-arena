@@ -803,6 +803,14 @@ export default function ChatInterface() {
     setAttachedKnowledge(prev => prev.filter(item => item.id !== id));
   };
 
+  const toggleKnowledgeAttachment = (item: KnowledgeItem) => {
+    setAttachedKnowledge(prev => {
+      const exists = prev.some(k => k.id === item.id);
+      if (exists) return prev.filter(k => k.id !== item.id);
+      return [...prev, item];
+    });
+  };
+
   const removeAttachedFile = (id: string) => {
     setAttachedFiles(prev => prev.filter(file => file.id !== id));
   };
