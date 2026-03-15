@@ -8,9 +8,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useUsageLimit } from '@/hooks/useUsageLimit';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText, Square } from 'lucide-react';
+import { Send, MessageSquare, Plus, Trash2, Bot, Users, LogOut, User, Forward, ChevronDown, Paperclip, X, File, Download, FileText, Square, BookOpen } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -107,6 +109,7 @@ export default function ChatInterface() {
   const [pinQueue, setPinQueue] = useState<Array<{ messageId: string; content: string }>>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [mobileDrawerTab, setMobileDrawerTab] = useState<MobileTab | null>(null);
+  const [knowledgePickerOpen, setKnowledgePickerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -800,6 +803,14 @@ export default function ChatInterface() {
     setAttachedKnowledge(prev => prev.filter(item => item.id !== id));
   };
 
+  const toggleKnowledgeAttachment = (item: KnowledgeItem) => {
+    setAttachedKnowledge(prev => {
+      const exists = prev.some(k => k.id === item.id);
+      if (exists) return prev.filter(k => k.id !== item.id);
+      return [...prev, item];
+    });
+  };
+
   const removeAttachedFile = (id: string) => {
     setAttachedFiles(prev => prev.filter(file => file.id !== id));
   };
@@ -1363,6 +1374,41 @@ export default function ChatInterface() {
             >
               <Paperclip className="w-4 h-4" />
             </Button>
+            <Popover open={knowledgePickerOpen} onOpenChange={setKnowledgePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!currentSessionId || knowledgeBase.length === 0}
+                  className="shrink-0 h-10 w-10 p-0 relative"
+                  title="Attach Knowledge"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  {attachedKnowledge.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] rounded-full h-4 w-4 flex items-center justify-center">
+                      {attachedKnowledge.length}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-2" align="start">
+                <div className="text-xs font-medium mb-2 text-muted-foreground">Attach Knowledge</div>
+                <ScrollArea className="max-h-48">
+                  {knowledgeBase.map((item) => (
+                    <label
+                      key={item.id}
+                      className="flex items-center gap-2 p-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={attachedKnowledge.some(k => k.id === item.id)}
+                        onCheckedChange={() => toggleKnowledgeAttachment(item)}
+                      />
+                      <span className="truncate">{item.title}</span>
+                    </label>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
             <Textarea
               ref={textareaRef}
               value={input}
@@ -1666,6 +1712,41 @@ export default function ChatInterface() {
                 >
                   <Paperclip className="w-4 h-4" />
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!currentSessionId || knowledgeBase.length === 0}
+                      className="shrink-0 h-10 w-10 p-0 relative"
+                      title="Attach Knowledge"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      {attachedKnowledge.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] rounded-full h-4 w-4 flex items-center justify-center">
+                          {attachedKnowledge.length}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="start">
+                    <div className="text-xs font-medium mb-2 text-muted-foreground">Attach Knowledge</div>
+                    <ScrollArea className="max-h-48">
+                      {knowledgeBase.map((item) => (
+                        <label
+                          key={item.id}
+                          className="flex items-center gap-2 p-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={attachedKnowledge.some(k => k.id === item.id)}
+                            onCheckedChange={() => toggleKnowledgeAttachment(item)}
+                          />
+                          <span className="truncate">{item.title}</span>
+                        </label>
+                      ))}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
                 <Textarea
                   ref={textareaRef}
                   value={input}

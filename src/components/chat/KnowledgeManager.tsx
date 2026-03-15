@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Edit, Trash2, BookOpen, Search, X, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, BookOpen, Search, X } from 'lucide-react';
 
 interface KnowledgeItem {
   id: string;
@@ -274,53 +274,39 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
             </div>
           ) : (
             filteredKnowledge.map((item) => (
-              <Card key={item.id} className="p-4 cursor-pointer hover:bg-card/80 transition-colors" onClick={() => handlePreview(item)}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm mb-2 truncate">{item.title}</h3>
-                    <p className="text-xs text-muted-foreground line-clamp-3">
-                      {item.content}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Added {new Date(item.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
+              <Card key={item.id} className="p-3 cursor-pointer hover:bg-card/80 transition-colors" onClick={() => handlePreview(item)}>
+                <h3 className="font-medium text-sm mb-1 truncate">{item.title}</h3>
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  {item.content}
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </p>
                   <div className="flex gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePreview(item);
-                      }}
-                      title="Preview"
-                    >
-                      <Eye className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0"
+                      className="h-7 w-7 p-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleEdit(item);
                       }}
                       title="Edit"
                     >
-                      <Edit className="w-3 h-3" />
+                      <Edit className="w-3.5 h-3.5" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(item.id);
                       }}
                       title="Delete"
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 </div>
