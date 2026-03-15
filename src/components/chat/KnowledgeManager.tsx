@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Edit, Trash2, BookOpen, Search, X, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, BookOpen, Search, X } from 'lucide-react';
 
 interface KnowledgeItem {
   id: string;
