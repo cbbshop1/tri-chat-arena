@@ -227,6 +227,19 @@ export default function KnowledgeManager({ knowledgeBase, onRefresh }: Knowledge
           </ScrollArea>
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
+              variant="destructive"
+              onClick={() => {
+                if (previewItem) {
+                  handleDelete(previewItem.id);
+                  setIsPreviewOpen(false);
+                }
+              }}
+              className="gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </Button>
+            <Button
               variant="outline"
               onClick={() => {
                 if (previewItem) {
